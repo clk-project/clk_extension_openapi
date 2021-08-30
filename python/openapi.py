@@ -15,6 +15,7 @@ from clk.lib import TablePrinter, call, check_output, echo_json
 from clk.log import get_logger
 from clk.overloads import argument, flag, get_command
 from clk.types import DynamicChoice
+from simplejson.errors import JSONDecodeError
 
 LOGGER = get_logger(__name__)
 
@@ -78,13 +79,15 @@ def api():
     return result
 
 
-def get(path, headers):
+def get(path, headers, json={}):
     "Get the api"
     if "security" in api()["paths"][path]["get"]:
         if config.openapi.bearer:
             headers["Authorization"] = "Bearer " + config.openapi.bearer
+    formatted_path = path.format(**json)
+    LOGGER.action(f"Getting {formatted_path}")
     return requests.get(
-        config.openapi.base_url + path,
+        config.openapi.base_url + formatted_path,
         verify=config.openapi.verify,
         headers=headers,
     ).json()
@@ -104,14 +107,44 @@ class GetRessource(DynamicChoice):
         return openapi_get_keys()
 
 
+def get_get_parameters(path):
+    api_ = api()
+    path_data = api_["paths"][path]["get"]
+    parameters = path_data.get("parameters", [])
+    for parameter in parameters:
+        schema = parameter["schema"]
+        if "$ref" in schema:
+            ref = schema["$ref"]
+            parameter["schema"] = dict_json_path(api_, ref)
+    return parameters
+
+
 class Header(DynamicChoice):
     def choices(self):
         api_ = api()
         security = api_["paths"][config.openapi_get.path]["get"]["security"]
-        keys = sum([[key + "=" for key in sec.keys()] for sec in security], [])
+        keys = sum([[key + ":" for key in sec.keys()] for sec in security], [])
         return keys
 
     def convert(self, value, param, ctx):
+        return value
+
+
+class GetParameters(Header):
+    def choices(self):
+        keys = super().choices()
+        if not hasattr(config.openapi_get, "given_value"):
+            config.openapi_get.given_value = set()
+        parameters = get_get_parameters(config.openapi_get.path)
+        return [
+            parameter["name"] + "=" for parameter in parameters
+            if not parameter["name"] in config.openapi_get.given_value
+        ] + keys
+
+    def convert(self, value, param, ctx):
+        if not hasattr(config.openapi_get, "given_value"):
+            config.openapi_get.given_value = set()
+        config.openapi_get.given_value.add(value.split("=")[0])
         return value
 
 
@@ -126,20 +159,24 @@ class Header(DynamicChoice):
 )
 @param_config(
     "openapi_get",
-    "headers",
+    "arguments",
     kls=argument,
     expose_value=True,
     help="Some header argument",
-    type=Header(),
+    type=GetParameters(),
     nargs=-1,
 )
-def _get(path, headers):
+def _get(path, arguments):
     """Get the given path"""
     headers = {
-        header.split("=")[0]: header.split("=")[1]
-        for header in headers
+        header.split(":")[0]: header.split(":")[1]
+        for header in arguments if ":" in header
     }
-    echo_json(get(path, headers))
+    json = {
+        parameter.split("=")[0]: parameter.split("=")[1]
+        for parameter in arguments if "=" in parameter
+    }
+    echo_json(get(path, headers, json=json))
 
 
 def post(path, json, headers=None):
@@ -153,12 +190,19 @@ def post(path, json, headers=None):
         key: value
         for key, value in json.items() if key in get_post_properties(path)
     }
-    return requests.post(
+    LOGGER.action(f"Posting to {path}")
+
+    resp = requests.post(
         config.openapi.base_url + path,
         verify=config.openapi.verify,
         json=json,
         headers=headers,
-    ).json()
+    )
+    try:
+        return resp.json()
+    except JSONDecodeError:
+        raise click.UsageError("Cannot interpret the following as json in the"
+                               f" post answer: {resp.text}")
 
 
 class PostRessource(DynamicChoice):
