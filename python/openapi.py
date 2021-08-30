@@ -122,7 +122,9 @@ def get_get_parameters(path):
 class Header(DynamicChoice):
     def choices(self):
         api_ = api()
-        security = api_["paths"][config.openapi_get.path]["get"]["security"]
+        parameters = api_["paths"][config.openapi_current.path][
+            config.openapi_current.method]
+        security = parameters.get("security", {})
         keys = sum([[key + ":" for key in sec.keys()] for sec in security], [])
         return keys
 
@@ -133,32 +135,38 @@ class Header(DynamicChoice):
 class GetParameters(Header):
     def choices(self):
         keys = super().choices()
-        if not hasattr(config.openapi_get, "given_value"):
-            config.openapi_get.given_value = set()
-        parameters = get_get_parameters(config.openapi_get.path)
+        if not hasattr(config.openapi_current, "given_value"):
+            config.openapi_current.given_value = set()
+        parameters = get_get_parameters(config.openapi_current.path)
         return [
             parameter["name"] + "=" for parameter in parameters
-            if not parameter["name"] in config.openapi_get.given_value
+            if not parameter["name"] in config.openapi_current.given_value
         ] + keys
 
     def convert(self, value, param, ctx):
-        if not hasattr(config.openapi_get, "given_value"):
-            config.openapi_get.given_value = set()
-        config.openapi_get.given_value.add(value.split("=")[0])
+        if not hasattr(config.openapi_current, "given_value"):
+            config.openapi_current.given_value = set()
+        config.openapi_current.given_value.add(value.split("=")[0])
         return value
+
+
+def get_callback(ctx, attr, value):
+    config.openapi_current.method = "get"
+    return value
 
 
 @openapi.command()
 @param_config(
-    "openapi_get",
+    "openapi_current",
     "path",
     kls=argument,
     expose_value=True,
     help="The path to get",
     type=GetRessource(),
+    callback=get_callback,
 )
 @param_config(
-    "openapi_get",
+    "openapi_current",
     "arguments",
     kls=argument,
     expose_value=True,
@@ -190,7 +198,7 @@ def post(path, json, headers=None):
         key: value
         for key, value in json.items() if key in get_post_properties(path)
     }
-    LOGGER.action(f"Posting to {path}")
+    LOGGER.action(f"Posting to {formatted_path}")
 
     resp = requests.post(
         config.openapi.base_url + path,
@@ -244,24 +252,25 @@ def get_post_parameters(path):
     return parameters
 
 
-class PostPropertiesRessource(DynamicChoice):
+class PostPropertiesRessource(Header):
     def choices(self):
-        if not hasattr(config.openapi_post, "given_value"):
-            config.openapi_post.given_value = set()
-        properties = get_post_properties(config.openapi_post.path)
-        parameters = get_post_parameters(config.openapi_post.path)
+        keys = super().choices()
+        if not hasattr(config.openapi_current, "given_value"):
+            config.openapi_current.given_value = set()
+        properties = get_post_properties(config.openapi_current.path)
+        parameters = get_post_parameters(config.openapi_current.path)
         return [
             parameter["name"] + "=" for parameter in parameters
-            if not parameter["name"] in config.openapi_post.given_value
+            if not parameter["name"] in config.openapi_current.given_value
         ] + [
             key + "=" for key in properties.keys()
-            if not key in config.openapi_post.given_value
-        ]
+            if not key in config.openapi_current.given_value
+        ] + keys
 
     def convert(self, value, param, ctx):
-        if not hasattr(config.openapi_post, "given_value"):
-            config.openapi_post.given_value = set()
-        config.openapi_post.given_value.add(value.split("=")[0])
+        if not hasattr(config.openapi_current, "given_value"):
+            config.openapi_current.given_value = set()
+        config.openapi_current.given_value.add(value.split("=")[0])
         return value
 
 
@@ -272,16 +281,22 @@ def parse_value(value):
         return value
 
 
+def post_callback(ctx, attr, value):
+    config.openapi_current.method = "post"
+    return value
+
+
 @openapi.command()
 @param_config(
-    "openapi_post",
+    "openapi_current",
     "path",
     kls=argument,
     expose_value=True,
     help="The path to post to",
     type=PostRessource(),
+    callback=post_callback,
 )
-@param_config("openapi_post",
+@param_config("openapi_current",
               "params",
               kls=argument,
               nargs=-1,
@@ -290,16 +305,20 @@ def parse_value(value):
               expose_value=True)
 def _post(path, params):
     """post to the given path"""
+    headers = {
+        header.split(":")[0]: header.split(":")[1]
+        for header in params if ":" in header
+    }
     body_json = {
         param.split("=")[0]: parse_value(param.split("=")[1])
         for param in params
     }
-    echo_json(post(path, json=body_json))
+    echo_json(post(path, headers=headers, json=body_json))
 
 
 @openapi.command()
 @param_config(
-    "openapi_post",
+    "openapi_current",
     "path",
     kls=argument,
     expose_value=True,
