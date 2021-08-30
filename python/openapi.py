@@ -208,7 +208,7 @@ class PostPropertiesRessource(DynamicChoice):
         parameters = get_post_parameters(config.openapi_post.path)
         return [
             parameter["name"] + "=" for parameter in parameters
-            if not parameters["name"] in config.openapi_post.given_value
+            if not parameter["name"] in config.openapi_post.given_value
         ] + [
             key + "=" for key in properties.keys()
             if not key in config.openapi_post.given_value
