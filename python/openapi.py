@@ -86,11 +86,16 @@ def get(path, headers, json={}):
             headers["Authorization"] = "Bearer " + config.openapi.bearer
     formatted_path = path.format(**json)
     LOGGER.action(f"Getting {formatted_path}")
-    return requests.get(
+    resp = requests.get(
         config.openapi.base_url + formatted_path,
         verify=config.openapi.verify,
         headers=headers,
-    ).json()
+    )
+    try:
+        return resp.json()
+    except JSONDecodeError:
+        raise click.UsageError("Cannot interpret the following as json in the"
+                               f" post answer: {resp.text}")
 
 
 @openapi.command()
