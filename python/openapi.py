@@ -79,13 +79,19 @@ def api():
     return result
 
 
-def get(path, headers, json=None):
+def get(path, headers, json=None, query_parameters=None):
     "Get the api"
     json = json or {}
+    query_parameters = query_parameters or {}
     if "security" in api()["paths"][path]["get"]:
         if config.openapi.bearer:
             headers["Authorization"] = "Bearer " + config.openapi.bearer
     formatted_path = path.format(**json)
+    if query_parameters:
+        formatted_path += "?"
+    for key, value in query_parameters.items():
+        formatted_path += f"{key}={value}"
+
     LOGGER.action(f"Getting {formatted_path}")
     resp = requests.get(
         config.openapi.base_url + formatted_path,
@@ -143,9 +149,18 @@ class GetParameters(Header):
         keys = super().choices()
         if not hasattr(config.openapi_current, "given_value"):
             config.openapi_current.given_value = set()
+
         parameters = get_get_parameters(config.openapi_current.path)
+
+        def separator(parameter):
+            if parameter.get("in") == "query":
+                return "?"
+            else:
+                return "="
+
         return [
-            parameter["name"] + "=" for parameter in parameters
+            parameter["name"] + separator(parameter)
+            for parameter in parameters
             if not parameter["name"] in config.openapi_current.given_value
         ] + keys
 
@@ -190,7 +205,11 @@ def _get(path, arguments):
         parameter.split("=")[0]: parameter.split("=")[1]
         for parameter in arguments if "=" in parameter
     }
-    echo_json(get(path, headers, json=json))
+    query_parameters = {
+        parameter.split("?")[0]: parameter.split("?")[1]
+        for parameter in arguments if "?" in parameter
+    }
+    echo_json(get(path, headers, json=json, query_parameters=query_parameters))
 
 
 def post(path, json, headers=None):
