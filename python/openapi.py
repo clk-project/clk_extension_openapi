@@ -79,8 +79,9 @@ def api():
     return result
 
 
-def get(path, headers, json={}):
+def get(path, headers, json=None):
     "Get the api"
+    json = json or {}
     if "security" in api()["paths"][path]["get"]:
         if config.openapi.bearer:
             headers["Authorization"] = "Bearer " + config.openapi.bearer
