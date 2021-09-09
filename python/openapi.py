@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding:utf-8 -*-
 import json
+from json.decoder import JSONDecodeError
 from pathlib import Path
 from textwrap import indent
 
@@ -15,7 +16,6 @@ from clk.lib import TablePrinter, call, check_output, echo_json
 from clk.log import get_logger
 from clk.overloads import argument, flag, get_command
 from clk.types import DynamicChoice
-from simplejson.errors import JSONDecodeError
 
 LOGGER = get_logger(__name__)
 
@@ -296,16 +296,35 @@ class PostPropertiesRessource(Header):
         if not hasattr(config.openapi_current, "given_value"):
             config.openapi_current.given_value = set()
         config.openapi_current.given_value.add(value.split("=")[0])
-        if "=@" in value:
+        res = {}
+        if value.startswith("@"):
+            filepath = value[len("@"):]
+            values = json.loads(Path(filepath).read_text())
+            res["value"] = values
+            res["type"] = "value"
+        elif "=@" in value:
             key, value = value.split("=")
             filepath = value[len("@"):]
             value = json.loads(Path(filepath).read_text())
-            value = f"{key}={value}"
-        return value
+            res["type"] = "value"
+            res["value"] = {key: value}
+            return key, value
+        elif "=" in value:
+            key, value = value.split("=")
+            value = parse_value(value)
+            res["type"] = "value"
+            res["value"] = {key: value}
+        elif ":" in value:
+            key, value = value.split(":")
+            res["type"] = "header"
+            res["value"] = {key: value}
+        else:
+            raise NotImplementedError()
+        return res
 
 
 def parse_value(value):
-    if "[" in value:
+    if value.startswith("[") or value.startswith("{") or value.startswith('"'):
         return json.loads(value)
     else:
         return value
@@ -335,15 +354,15 @@ def post_callback(ctx, attr, value):
               expose_value=True)
 def _post(path, params):
     """post to the given path"""
-    headers = {
-        header.split(":")[0]: header.split(":")[1]
-        for header in params if ":" in header
-    }
-    body_json = {
-        param.split("=")[0]: parse_value(param.split("=")[1])
-        for param in params
-    }
-    echo_json(post(path, headers=headers, json=body_json))
+    headers = {}
+    for param in params:
+        if param["type"] == "header":
+            headers.update(param["value"])
+    values = {}
+    for param in params:
+        if param["type"] == "value":
+            values.update(param["value"])
+    echo_json(post(path, headers=headers, json=values))
 
 
 @openapi.command()
