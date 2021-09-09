@@ -296,6 +296,11 @@ class PostPropertiesRessource(Header):
         if not hasattr(config.openapi_current, "given_value"):
             config.openapi_current.given_value = set()
         config.openapi_current.given_value.add(value.split("=")[0])
+        if "=@" in value:
+            key, value = value.split("=")
+            filepath = value[len("@"):]
+            value = json.loads(Path(filepath).read_text())
+            value = f"{key}={value}"
         return value
 
 
