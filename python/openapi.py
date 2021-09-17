@@ -239,10 +239,16 @@ def post(path, json, headers=None):
 
 
 class PostRessource(DynamicChoice):
+    def __init__(self, method, *args, **kwargs):
+        super(*args, **kwargs)
+        self.method = method
+
     def choices(self):
         def openapi_post_keys():
             paths = api()["paths"]
-            return [key for key, values in paths.items() if "post" in values]
+            return [
+                key for key, values in paths.items() if self.method in values
+            ]
 
         return openapi_post_keys()
 
@@ -257,8 +263,10 @@ def dict_json_path(dict, json_path):
 
 def get_post_properties(path):
     api_ = api()
-    schema = api_["paths"][path]["post"]["requestBody"]["content"][
-        "application/json"]["schema"]
+    path_data = api_["paths"][path][config.openapi_current.method]
+    if "requestBody" not in path_data:
+        return {}
+    schema = path_data["requestBody"]["content"]["application/json"]["schema"]
     if "$ref" in schema:
         ref = schema["$ref"]
         schema = dict_json_path(api_, ref)
@@ -267,7 +275,7 @@ def get_post_properties(path):
 
 def get_post_parameters(path):
     api_ = api()
-    path_data = api_["paths"][path]["post"]
+    path_data = api_["paths"][path][config.openapi_current.method]
     parameters = path_data.get("parameters", [])
     for parameter in parameters:
         schema = parameter["schema"]
@@ -330,6 +338,13 @@ def parse_value(value):
         return value
 
 
+def parse_value_properties(value, type_):
+    if type_ == "number":
+        return int(value)
+    else:
+        return value
+
+
 def post_callback(ctx, attr, value):
     config.openapi_current.method = "post"
     return value
@@ -342,7 +357,7 @@ def post_callback(ctx, attr, value):
     kls=argument,
     expose_value=True,
     help="The path to post to",
-    type=PostRessource(),
+    type=PostRessource("post"),
     callback=post_callback,
 )
 @param_config("openapi_current",
@@ -365,6 +380,69 @@ def _post(path, params):
     echo_json(post(path, headers=headers, json=values))
 
 
+def patch(path, json, headers=None):
+    "patch to the api"
+    headers = headers or {}
+    if "security" in api()["paths"][path][config.openapi_current.method]:
+        if config.openapi.bearer:
+            headers["Authorization"] = "Bearer " + config.openapi.bearer
+    formatted_path = path.format(**json)
+    json = {
+        key: parse_value_properties(
+            value,
+            get_post_properties(path).get(key, {}).get("type"))
+        for key, value in json.items() if key in get_post_properties(path)
+    }
+    LOGGER.action(f"Patching to {formatted_path}")
+
+    resp = requests.patch(
+        config.openapi.base_url + path,
+        verify=config.openapi.verify,
+        json=json,
+        headers=headers,
+    )
+    try:
+        return resp.json()
+    except JSONDecodeError:
+        raise click.UsageError("Cannot interpret the following as json in the"
+                               f" post answer: {resp.text}")
+
+
+def patch_callback(ctx, attr, value):
+    config.openapi_current.method = "patch"
+    return value
+
+
+@openapi.command()
+@param_config(
+    "openapi_current",
+    "path",
+    kls=argument,
+    expose_value=True,
+    help="The path to patch to",
+    type=PostRessource("patch"),
+    callback=patch_callback,
+)
+@param_config("openapi_current",
+              "params",
+              kls=argument,
+              nargs=-1,
+              help="The arguments, separated by =",
+              type=PostPropertiesRessource(),
+              expose_value=True)
+def _patch(path, params):
+    """post to the given path"""
+    headers = {}
+    for param in params:
+        if param["type"] == "header":
+            headers.update(param["value"])
+    values = {}
+    for param in params:
+        if param["type"] == "value":
+            values.update(param["value"])
+    echo_json(patch(path, headers=headers, json=values))
+
+
 @openapi.command()
 @param_config(
     "openapi_current",
@@ -372,10 +450,11 @@ def _post(path, params):
     kls=argument,
     expose_value=True,
     help="The path to post to",
-    type=PostRessource(),
+    type=PostRessource("post"),
 )
 def describe_post(path):
     """Show the expected properties of the given path."""
+    config.openapi_current.method = "post"
     properties = get_post_properties(path)
     parameters = get_post_parameters(path)
 
