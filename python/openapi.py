@@ -72,6 +72,14 @@ class OpenApi:
     kls=flag,
     help="Don't try to interpret the resp as json",
 )
+@param_config(
+    "openapi",
+    "-o",
+    "--output",
+    type=Path,
+    typ=OpenApi,
+    help="Some output file to put the result into",
+)
 @option(
     "--bearer",
     help=("Security token to access the API."
@@ -214,6 +222,16 @@ def get_callback(ctx, attr, value):
     return value
 
 
+def echo_result(result):
+    if config.openapi.output is not None:
+        config.openapi.output.write_text(result)
+    else:
+        if config.openapi.resp_as_text:
+            print(result)
+        else:
+            echo_json(result)
+
+
 @openapi.command()
 @param_config(
     "openapi_current",
@@ -247,7 +265,8 @@ def _get(path, arguments):
         parameter.split("?")[0]: parameter.split("?")[1]
         for parameter in arguments if "?" in parameter
     }
-    echo_json(get(path, headers, json=json, query_parameters=query_parameters))
+    echo_result(
+        get(path, headers, json=json, query_parameters=query_parameters))
 
 
 def post(path, json, headers=None):
@@ -422,7 +441,7 @@ def _post(path, params):
     for param in params:
         if param["type"] == "value":
             values.update(param["value"])
-    echo_json(post(path, headers=headers, json=values))
+    echo_result(post(path, headers=headers, json=values))
 
 
 def patch(path, json, headers=None):
@@ -489,7 +508,7 @@ def _patch(path, params):
     for param in params:
         if param["type"] == "value":
             values.update(param["value"])
-    echo_json(patch(path, headers=headers, json=values))
+    echo_result(patch(path, headers=headers, json=values))
 
 
 @openapi.command()
