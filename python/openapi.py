@@ -120,9 +120,11 @@ def get(path, headers, json=None, query_parameters=None):
     for key, value in query_parameters.items():
         formatted_path += f"{key}={value}"
 
-    LOGGER.action(f"Getting {formatted_path}")
+    url = config.openapi.base_url + formatted_path
+    LOGGER.action(f"Getting {url}")
+    LOGGER.debug(f"With headers: {headers}")
     resp = requests.get(
-        config.openapi.base_url + formatted_path,
+        url,
         verify=config.openapi.verify,
         headers=headers,
     )
