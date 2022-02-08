@@ -16,6 +16,7 @@ from clk.lib import TablePrinter, call, check_output, echo_json
 from clk.log import get_logger
 from clk.overloads import argument, flag, get_command
 from clk.types import DynamicChoice
+from simplejson.errors import JSONDecodeError as SimplejsonJSONDecodeError
 
 LOGGER = get_logger(__name__)
 
@@ -64,6 +65,13 @@ class OpenApi:
     help="Verify https",
     expose_value=True,
 )
+@param_config(
+    "openapi",
+    "--resp-as-text/--resp-as-json",
+    typ=OpenApi,
+    kls=flag,
+    help="Don't try to interpret the resp as json",
+)
 @option(
     "--bearer",
     help=("Security token to access the API."
@@ -109,11 +117,15 @@ def get(path, headers, json=None, query_parameters=None):
         verify=config.openapi.verify,
         headers=headers,
     )
-    try:
-        return resp.json()
-    except JSONDecodeError:
-        raise click.UsageError("Cannot interpret the following as json in the"
-                               f" post answer: {resp.text}")
+    if config.openapi.resp_as_text:
+        return resp.text
+    else:
+        try:
+            return resp.json()
+        except (JSONDecodeError, SimplejsonJSONDecodeError):
+            raise click.UsageError(
+                "Cannot interpret the following as json in the"
+                f" post answer: '{resp.text}'")
 
 
 @openapi.command()
@@ -122,7 +134,9 @@ def get_token():
 
 
 class GetRessource(DynamicChoice):
+
     def choices(self):
+
         def openapi_get_keys():
             paths = api()["paths"]
             return [key for key, values in paths.items() if "get" in values]
@@ -143,6 +157,7 @@ def get_get_parameters(path):
 
 
 class Header(DynamicChoice):
+
     def choices(self):
         api_ = api()
         parameters = api_["paths"][config.openapi_current.path][
@@ -156,6 +171,7 @@ class Header(DynamicChoice):
 
 
 class GetParameters(Header):
+
     def choices(self):
         keys = super().choices()
         if not hasattr(config.openapi_current, "given_value"):
@@ -242,19 +258,25 @@ def post(path, json, headers=None):
         json=json,
         headers=headers,
     )
-    try:
-        return resp.json()
-    except JSONDecodeError:
-        raise click.UsageError("Cannot interpret the following as json in the"
-                               f" post answer: {resp.text}")
+    if config.openapi.resp_as_text:
+        return resp.text
+    else:
+        try:
+            return resp.json()
+        except (JSONDecodeError, SimplejsonJSONDecodeError):
+            raise click.UsageError(
+                "Cannot interpret the following as json in the"
+                f" post answer: '{resp.text}'")
 
 
 class PostRessource(DynamicChoice):
+
     def __init__(self, method, *args, **kwargs):
         super(*args, **kwargs)
         self.method = method
 
     def choices(self):
+
         def openapi_post_keys():
             paths = api()["paths"]
             return [
@@ -297,6 +319,7 @@ def get_post_parameters(path):
 
 
 class PostPropertiesRessource(Header):
+
     def choices(self):
         keys = super().choices()
         if not hasattr(config.openapi_current, "given_value"):
@@ -308,7 +331,7 @@ class PostPropertiesRessource(Header):
             if not parameter["name"] in config.openapi_current.given_value
         ] + [
             key + "=" for key in properties.keys()
-            if not key in config.openapi_current.given_value
+            if key not in config.openapi_current.given_value
         ] + keys
 
     def convert(self, value, param, ctx):
@@ -412,11 +435,15 @@ def patch(path, json, headers=None):
         json=json,
         headers=headers,
     )
-    try:
-        return resp.json()
-    except JSONDecodeError:
-        raise click.UsageError("Cannot interpret the following as json in the"
-                               f" post answer: {resp.text}")
+    if config.openapi.resp_as_text:
+        return resp.text
+    else:
+        try:
+            return resp.json()
+        except (JSONDecodeError, SimplejsonJSONDecodeError):
+            raise click.UsageError(
+                "Cannot interpret the following as json in the"
+                f" post answer: '{resp.text}'")
 
 
 def patch_callback(ctx, attr, value):
