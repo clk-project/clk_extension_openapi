@@ -333,7 +333,7 @@ def get_post_properties(path):
     if "$ref" in schema:
         ref = schema["$ref"]
         schema = dict_json_path(api_, ref)
-    return schema["properties"]
+    return schema.get("properties", {})
 
 
 def get_post_parameters(path):
