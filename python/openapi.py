@@ -124,61 +124,70 @@ def list_servers_urls(format, fields):
         tp.echo_records(api()["servers"])
 
 
-def inject_headers(path, headers):
-    security_headers = list(config.openapi.bearer_token_headers)
-    for security in api()["paths"][path][config.openapi_current.method].get(
-            "security", []):
-        security_headers.extend(security.keys())
-    for header in security_headers:
-        if header == "Authorization":
-            # follow the OAuth 2.0 standard, see https://datatracker.ietf.org/doc/html/rfc6750#section-2.1
-            headers[header] = "Bearer " + config.openapi.bearer
+class HTTPAction:
+
+    def __init__(self, verb=None):
+        self.verb = verb or config.openapi_current.method
+
+    def __call__(self, path, headers=None, json=None, query_parameters=None):
+        headers = headers or {}
+        json = json or {}
+        query_parameters = query_parameters or {}
+        self.inject_headers(path, headers)
+        formatted_path = self.format_path(path, json, query_parameters)
+        body_json = self.build_body_json(path, json)
+        url = config.openapi.base_url + formatted_path
+        LOGGER.action(f"{self.verb} {url}")
+        if headers:
+            LOGGER.debug(f"With headers: {headers}")
+        if body_json:
+            LOGGER.debug(f"With json: {body_json}")
+        method = getattr(requests, self.verb)
+        resp = method(
+            url,
+            verify=config.openapi.verify,
+            headers=headers,
+            json=body_json,
+        )
+        return self.handle_resp(resp)
+
+    def build_body_json(self, path, json):
+        return {
+            key: parse_value_properties(
+                value,
+                get_properties(path).get(key, {}).get("type"))
+            for key, value in json.items() if key in get_properties(path)
+        }
+
+    def inject_headers(self, path, headers):
+        security_headers = list(config.openapi.bearer_token_headers)
+        for security in api()["paths"][path][self.verb].get("security", []):
+            security_headers.extend(security.keys())
+        for header in security_headers:
+            if header == "Authorization":
+                # follow the OAuth 2.0 standard, see https://datatracker.ietf.org/doc/html/rfc6750#section-2.1
+                headers[header] = "Bearer " + config.openapi.bearer
+            else:
+                headers[header] = config.openapi.bearer
+
+    def handle_resp(self, resp):
+        if config.openapi.resp_as_text:
+            return resp.text
         else:
-            headers[header] = config.openapi.bearer
+            try:
+                return resp.json()
+            except (JSONDecodeError, SimplejsonJSONDecodeError):
+                raise click.UsageError(
+                    "Cannot interpret the following as json in the"
+                    f" post answer: '{resp.text}'")
 
-
-def handle_resp(resp):
-    if config.openapi.resp_as_text:
-        return resp.text
-    else:
-        try:
-            return resp.json()
-        except (JSONDecodeError, SimplejsonJSONDecodeError):
-            raise click.UsageError(
-                "Cannot interpret the following as json in the"
-                f" post answer: '{resp.text}'")
-
-
-def format_path(path, json, query_parameters):
-    formatted_path = path.format(**json)
-    if query_parameters:
-        formatted_path += "?"
-    for key, value in query_parameters.items():
-        formatted_path += f"{key}={value}"
-    return formatted_path
-
-
-def http_action(path, headers=None, json=None, query_parameters=None):
-    headers = headers or {}
-    json = json or {}
-    query_parameters = query_parameters or {}
-    inject_headers(path, headers)
-    formatted_path = format_path(path, json, query_parameters)
-    body_json = build_body_json(path, json)
-    url = config.openapi.base_url + formatted_path
-    LOGGER.action(f"{config.openapi_current.method} {url}")
-    if headers:
-        LOGGER.debug(f"With headers: {headers}")
-    if body_json:
-        LOGGER.debug(f"With json: {body_json}")
-    method = getattr(requests, config.openapi_current.method)
-    resp = method(
-        url,
-        verify=config.openapi.verify,
-        headers=headers,
-        json=body_json,
-    )
-    return handle_resp(resp)
+    def format_path(self, path, json, query_parameters):
+        formatted_path = path.format(**json)
+        if query_parameters:
+            formatted_path += "?"
+        for key, value in query_parameters.items():
+            formatted_path += f"{key}={value}"
+        return formatted_path
 
 
 @openapi.command()
@@ -299,20 +308,10 @@ def _get(path, arguments):
         parameter.split("?")[0]: parameter.split("?")[1]
         for parameter in arguments if "?" in parameter
     }
-    echo_result(
-        http_action(path,
-                    headers,
-                    json=json,
-                    query_parameters=query_parameters))
-
-
-def build_body_json(path, json):
-    return {
-        key:
-        parse_value_properties(value,
-                               get_properties(path).get(key, {}).get("type"))
-        for key, value in json.items() if key in get_properties(path)
-    }
+    echo_result(HTTPAction()(path,
+                             headers,
+                             json=json,
+                             query_parameters=query_parameters))
 
 
 class PostRessource(DynamicChoice):
@@ -457,7 +456,7 @@ def _post(path, params):
     for param in params:
         if param["type"] == "value":
             values.update(param["value"])
-    echo_result(http_action(path, headers=headers, json=values))
+    echo_result(HTTPAction()(path, headers=headers, json=values))
 
 
 def patch_callback(ctx, attr, value):
@@ -492,7 +491,7 @@ def _patch(path, params):
     for param in params:
         if param["type"] == "value":
             values.update(param["value"])
-    echo_result(http_action(path, headers=headers, json=values))
+    echo_result(HTTPAction()(path, headers=headers, json=values))
 
 
 def put_callback(ctx, attr, value):
@@ -527,7 +526,7 @@ def _put(path, params):
     for param in params:
         if param["type"] == "value":
             values.update(param["value"])
-    echo_result(http_action(path, headers=headers, json=values))
+    echo_result(HTTPAction()(path, headers=headers, json=values))
 
 
 @openapi.command()
