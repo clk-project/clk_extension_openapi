@@ -297,18 +297,22 @@ def _get(path, arguments):
         get(path, headers, json=json, query_parameters=query_parameters))
 
 
+def build_body_json(path, json, verb):
+    return {
+        key: parse_value_properties(
+            value,
+            get_post_properties(path).get(key, {}).get("type"))
+        for key, value in json.items() if key in get_post_properties(path)
+    }
+
+
 def post(path, json, headers=None, query_parameters=None):
     "post the api"
     headers = headers or {}
     query_parameters = query_parameters or {}
-
     inject_headers(path, headers, "post")
     formatted_path = format_path(path, json, query_parameters)
-
-    body_json = {
-        key: value
-        for key, value in json.items() if key in get_post_properties(path)
-    }
+    body_json = build_body_json(path, json, "post")
     LOGGER.action(f"Posting to {formatted_path}")
     resp = requests.post(
         config.openapi.base_url + formatted_path,
@@ -470,18 +474,13 @@ def patch(path, json, headers=None, query_parameters=None):
     query_parameters = query_parameters or {}
     inject_headers(path, headers, "patch")
     formatted_path = format_path(path, json, query_parameters)
-    json = {
-        key: parse_value_properties(
-            value,
-            get_post_properties(path).get(key, {}).get("type"))
-        for key, value in json.items() if key in get_post_properties(path)
-    }
+    body_json = build_body_json(path, json, "patch")
     LOGGER.action(f"Patching to {formatted_path}")
 
     resp = requests.patch(
         config.openapi.base_url + formatted_path,
         verify=config.openapi.verify,
-        json=json,
+        json=body_json,
         headers=headers,
     )
     return handle_resp(resp)
@@ -529,12 +528,7 @@ def put(path, json, headers=None, query_parameters=None):
 
     inject_headers(path, headers, "put")
     formatted_path = format_path(path, json, query_parameters)
-    body_json = {
-        key: parse_value_properties(
-            value,
-            get_post_properties(path).get(key, {}).get("type"))
-        for key, value in json.items() if key in get_post_properties(path)
-    }
+    body_json = build_body_json(path, json, "put")
     LOGGER.action(f"Putting to {formatted_path}")
 
     resp = requests.put(
