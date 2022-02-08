@@ -124,9 +124,10 @@ def list_servers_urls(format, fields):
         tp.echo_records(api()["servers"])
 
 
-def inject_headers(path, headers, verb):
+def inject_headers(path, headers):
     security_headers = list(config.openapi.bearer_token_headers)
-    for security in api()["paths"][path][verb].get("security", []):
+    for security in api()["paths"][path][config.openapi_current.method].get(
+            "security", []):
         security_headers.extend(security.keys())
     for header in security_headers:
         if header == "Authorization":
@@ -161,7 +162,7 @@ def get(path, headers, json=None, query_parameters=None):
     "Get the api"
     json = json or {}
     query_parameters = query_parameters or {}
-    inject_headers(path, headers, "get")
+    inject_headers(path, headers)
     formatted_path = format_path(path, json, query_parameters)
 
     url = config.openapi.base_url + formatted_path
@@ -297,12 +298,12 @@ def _get(path, arguments):
         get(path, headers, json=json, query_parameters=query_parameters))
 
 
-def build_body_json(path, json, verb):
+def build_body_json(path, json):
     return {
-        key: parse_value_properties(
-            value,
-            get_post_properties(path).get(key, {}).get("type"))
-        for key, value in json.items() if key in get_post_properties(path)
+        key:
+        parse_value_properties(value,
+                               get_properties(path).get(key, {}).get("type"))
+        for key, value in json.items() if key in get_properties(path)
     }
 
 
@@ -310,9 +311,9 @@ def post(path, json, headers=None, query_parameters=None):
     "post the api"
     headers = headers or {}
     query_parameters = query_parameters or {}
-    inject_headers(path, headers, "post")
+    inject_headers(path, headers)
     formatted_path = format_path(path, json, query_parameters)
-    body_json = build_body_json(path, json, "post")
+    body_json = build_body_json(path, json)
     LOGGER.action(f"Posting to {formatted_path}")
     resp = requests.post(
         config.openapi.base_url + formatted_path,
@@ -348,7 +349,7 @@ def dict_json_path(dict, json_path):
     return dict
 
 
-def get_post_properties(path):
+def get_properties(path):
     api_ = api()
     path_data = api_["paths"][path][config.openapi_current.method]
     if "requestBody" not in path_data:
@@ -378,7 +379,7 @@ class PostPropertiesRessource(Header):
         keys = super().choices()
         if not hasattr(config.openapi_current, "given_value"):
             config.openapi_current.given_value = set()
-        properties = get_post_properties(config.openapi_current.path)
+        properties = get_properties(config.openapi_current.path)
         parameters = get_post_parameters(config.openapi_current.path)
         return [
             parameter["name"] + "=" for parameter in parameters
@@ -472,9 +473,9 @@ def patch(path, json, headers=None, query_parameters=None):
     "patch to the api"
     headers = headers or {}
     query_parameters = query_parameters or {}
-    inject_headers(path, headers, "patch")
+    inject_headers(path, headers)
     formatted_path = format_path(path, json, query_parameters)
-    body_json = build_body_json(path, json, "patch")
+    body_json = build_body_json(path, json)
     LOGGER.action(f"Patching to {formatted_path}")
 
     resp = requests.patch(
@@ -526,9 +527,9 @@ def put(path, json, headers=None, query_parameters=None):
     headers = headers or {}
     query_parameters = query_parameters or {}
 
-    inject_headers(path, headers, "put")
+    inject_headers(path, headers)
     formatted_path = format_path(path, json, query_parameters)
-    body_json = build_body_json(path, json, "put")
+    body_json = build_body_json(path, json)
     LOGGER.action(f"Putting to {formatted_path}")
 
     resp = requests.put(
@@ -587,7 +588,7 @@ def _put(path, params):
 def describe_post(path):
     """Show the expected properties of the given path."""
     config.openapi_current.method = "post"
-    properties = get_post_properties(path)
+    properties = get_properties(path)
     parameters = get_post_parameters(path)
 
     def dump_desc(desc):
