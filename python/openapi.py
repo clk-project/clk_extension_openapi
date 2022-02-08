@@ -148,17 +148,21 @@ def handle_resp(resp):
                 f" post answer: '{resp.text}'")
 
 
-def get(path, headers, json=None, query_parameters=None):
-    "Get the api"
-    json = json or {}
-    query_parameters = query_parameters or {}
-    inject_headers(path, headers, "get")
-
+def format_path(path, json, query_parameters):
     formatted_path = path.format(**json)
     if query_parameters:
         formatted_path += "?"
     for key, value in query_parameters.items():
         formatted_path += f"{key}={value}"
+    return formatted_path
+
+
+def get(path, headers, json=None, query_parameters=None):
+    "Get the api"
+    json = json or {}
+    query_parameters = query_parameters or {}
+    inject_headers(path, headers, "get")
+    formatted_path = format_path(path, json, query_parameters)
 
     url = config.openapi.base_url + formatted_path
     LOGGER.action(f"Getting {url}")
@@ -293,21 +297,23 @@ def _get(path, arguments):
         get(path, headers, json=json, query_parameters=query_parameters))
 
 
-def post(path, json, headers=None):
+def post(path, json, headers=None, query_parameters=None):
     "post the api"
     headers = headers or {}
+    query_parameters = query_parameters or {}
+
     inject_headers(path, headers, "post")
-    formatted_path = path.format(**json)
-    json = {
+    formatted_path = format_path(path, json, query_parameters)
+
+    body_json = {
         key: value
         for key, value in json.items() if key in get_post_properties(path)
     }
     LOGGER.action(f"Posting to {formatted_path}")
-
     resp = requests.post(
         config.openapi.base_url + formatted_path,
         verify=config.openapi.verify,
-        json=json,
+        json=body_json,
         headers=headers,
     )
     return handle_resp(resp)
@@ -458,11 +464,12 @@ def _post(path, params):
     echo_result(post(path, headers=headers, json=values))
 
 
-def patch(path, json, headers=None):
+def patch(path, json, headers=None, query_parameters=None):
     "patch to the api"
     headers = headers or {}
+    query_parameters = query_parameters or {}
     inject_headers(path, headers, "patch")
-    formatted_path = path.format(**json)
+    formatted_path = format_path(path, json, query_parameters)
     json = {
         key: parse_value_properties(
             value,
@@ -515,12 +522,14 @@ def _patch(path, params):
     echo_result(patch(path, headers=headers, json=values))
 
 
-def put(path, json, headers=None):
+def put(path, json, headers=None, query_parameters=None):
     "put to the api"
     headers = headers or {}
+    query_parameters = query_parameters or {}
+
     inject_headers(path, headers, "put")
-    formatted_path = path.format(**json)
-    json = {
+    formatted_path = format_path(path, json, query_parameters)
+    body_json = {
         key: parse_value_properties(
             value,
             get_post_properties(path).get(key, {}).get("type"))
@@ -531,7 +540,7 @@ def put(path, json, headers=None):
     resp = requests.put(
         config.openapi.base_url + formatted_path,
         verify=config.openapi.verify,
-        json=json,
+        json=body_json,
         headers=headers,
     )
     return handle_resp(resp)
