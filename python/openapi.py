@@ -283,7 +283,7 @@ def post(path, json, headers=None):
     LOGGER.action(f"Posting to {formatted_path}")
 
     resp = requests.post(
-        config.openapi.base_url + path,
+        config.openapi.base_url + formatted_path,
         verify=config.openapi.verify,
         json=json,
         headers=headers,
@@ -460,7 +460,7 @@ def patch(path, json, headers=None):
     LOGGER.action(f"Patching to {formatted_path}")
 
     resp = requests.patch(
-        config.openapi.base_url + path,
+        config.openapi.base_url + formatted_path,
         verify=config.openapi.verify,
         json=json,
         headers=headers,
