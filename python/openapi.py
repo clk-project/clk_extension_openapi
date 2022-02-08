@@ -337,7 +337,7 @@ def _get(path, arguments):
                              query_parameters=query_parameters))
 
 
-class PostRessource(DynamicChoice):
+class OpenApiResource(DynamicChoice):
 
     def __init__(self, method, *args, **kwargs):
         super(*args, **kwargs)
@@ -412,7 +412,7 @@ def post_callback(ctx, attr, value):
     kls=argument,
     expose_value=True,
     help="The path to post to",
-    type=PostRessource("post"),
+    type=OpenApiResource("post"),
     callback=post_callback,
 )
 @param_config("openapi_current",
@@ -443,7 +443,7 @@ def patch_callback(ctx, attr, value):
     kls=argument,
     expose_value=True,
     help="The path to patch to",
-    type=PostRessource("patch"),
+    type=OpenApiResource("patch"),
     callback=patch_callback,
 )
 @param_config("openapi_current",
@@ -474,7 +474,7 @@ def put_callback(ctx, attr, value):
     kls=argument,
     expose_value=True,
     help="The path to put to",
-    type=PostRessource("put"),
+    type=OpenApiResource("put"),
     callback=put_callback,
 )
 @param_config("openapi_current",
@@ -500,7 +500,7 @@ def _put(path, params):
     kls=argument,
     expose_value=True,
     help="The path to post to",
-    type=PostRessource("post"),
+    type=OpenApiResource("post"),
 )
 def describe_post(path):
     """Show the expected properties of the given path."""
