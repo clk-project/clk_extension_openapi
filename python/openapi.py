@@ -32,13 +32,14 @@ class OpenApi:
         if not self._bearer:
 
             @cache_disk(expire=3600)
-            def update_bearer():
+            def update_bearer(parameters):
                 return check_output(
                     ["clk", "openapi", "--bearer", "None", "get-token"],
                     internal=True,
                 ).strip()
 
-            self._bearer = update_bearer()
+            self._bearer = update_bearer(
+                config.get_parameters("openapi.get-token"))
         return self._bearer
 
 
