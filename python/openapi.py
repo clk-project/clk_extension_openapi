@@ -155,8 +155,9 @@ class HTTPAction:
         return {
             key: parse_value_properties(
                 value,
-                get_properties(path).get(key, {}).get("type"))
-            for key, value in json.items() if key in get_properties(path)
+                get_openapi_properties(path).get(key, {}).get("type"))
+            for key, value in json.items()
+            if key in get_openapi_properties(path)
         }
 
     def inject_headers(self, path, headers):
@@ -339,7 +340,7 @@ def dict_json_path(dict, json_path):
     return dict
 
 
-def get_properties(path):
+def get_openapi_properties(path):
     api_ = api()
     path_data = api_["paths"][path][config.openapi_current.method]
     if "requestBody" not in path_data:
@@ -351,7 +352,7 @@ def get_properties(path):
     return schema.get("properties", {})
 
 
-def get_post_parameters(path):
+def get_openapi_parameters(path):
     api_ = api()
     path_data = api_["paths"][path][config.openapi_current.method]
     parameters = path_data.get("parameters", [])
@@ -363,14 +364,14 @@ def get_post_parameters(path):
     return parameters
 
 
-class PostPropertiesRessource(Header):
+class HTTPPropertiesResource(Header):
 
     def choices(self):
         keys = super().choices()
         if not hasattr(config.openapi_current, "given_value"):
             config.openapi_current.given_value = set()
-        properties = get_properties(config.openapi_current.path)
-        parameters = get_post_parameters(config.openapi_current.path)
+        properties = get_openapi_properties(config.openapi_current.path)
+        parameters = get_openapi_parameters(config.openapi_current.path)
         return [
             parameter["name"] + "=" for parameter in parameters
             if not parameter["name"] in config.openapi_current.given_value
@@ -444,7 +445,7 @@ def post_callback(ctx, attr, value):
               kls=argument,
               nargs=-1,
               help="The arguments, separated by =",
-              type=PostPropertiesRessource(),
+              type=HTTPPropertiesResource(),
               expose_value=True)
 def _post(path, params):
     """post to the given path"""
@@ -479,7 +480,7 @@ def patch_callback(ctx, attr, value):
               kls=argument,
               nargs=-1,
               help="The arguments, separated by =",
-              type=PostPropertiesRessource(),
+              type=HTTPPropertiesResource(),
               expose_value=True)
 def _patch(path, params):
     """post to the given path"""
@@ -514,7 +515,7 @@ def put_callback(ctx, attr, value):
               kls=argument,
               nargs=-1,
               help="The arguments, separated by =",
-              type=PostPropertiesRessource(),
+              type=HTTPPropertiesResource(),
               expose_value=True)
 def _put(path, params):
     """post to the given path"""
@@ -541,8 +542,8 @@ def _put(path, params):
 def describe_post(path):
     """Show the expected properties of the given path."""
     config.openapi_current.method = "post"
-    properties = get_properties(path)
-    parameters = get_post_parameters(path)
+    properties = get_openapi_properties(path)
+    parameters = get_openapi_parameters(path)
 
     def dump_desc(desc):
         indentation = "  "
