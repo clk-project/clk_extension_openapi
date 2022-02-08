@@ -511,6 +511,75 @@ def _patch(path, params):
     echo_result(patch(path, headers=headers, json=values))
 
 
+def put(path, json, headers=None):
+    "put to the api"
+    headers = headers or {}
+    if "security" in api()["paths"][path][config.openapi_current.method]:
+        if config.openapi.bearer:
+            headers["x-jwt-assertion"] = config.openapi.bearer
+        if config.openapi.bearer:
+            headers["Authorization"] = "Bearer " + config.openapi.bearer
+    formatted_path = path.format(**json)
+    json = {
+        key: parse_value_properties(
+            value,
+            get_post_properties(path).get(key, {}).get("type"))
+        for key, value in json.items() if key in get_post_properties(path)
+    }
+    LOGGER.action(f"Putting to {formatted_path}")
+
+    resp = requests.put(
+        config.openapi.base_url + formatted_path,
+        verify=config.openapi.verify,
+        json=json,
+        headers=headers,
+    )
+    if config.openapi.resp_as_text:
+        return resp.text
+    else:
+        try:
+            return resp.json()
+        except (JSONDecodeError, SimplejsonJSONDecodeError):
+            raise click.UsageError(
+                "Cannot interpret the following as json in the"
+                f" post answer: '{resp.text}'")
+
+
+def put_callback(ctx, attr, value):
+    config.openapi_current.method = "put"
+    return value
+
+
+@openapi.command()
+@param_config(
+    "openapi_current",
+    "path",
+    kls=argument,
+    expose_value=True,
+    help="The path to put to",
+    type=PostRessource("put"),
+    callback=put_callback,
+)
+@param_config("openapi_current",
+              "params",
+              kls=argument,
+              nargs=-1,
+              help="The arguments, separated by =",
+              type=PostPropertiesRessource(),
+              expose_value=True)
+def _put(path, params):
+    """post to the given path"""
+    headers = {}
+    for param in params:
+        if param["type"] == "header":
+            headers.update(param["value"])
+    values = {}
+    for param in params:
+        if param["type"] == "value":
+            values.update(param["value"])
+    echo_result(put(path, headers=headers, json=values))
+
+
 @openapi.command()
 @param_config(
     "openapi_current",
