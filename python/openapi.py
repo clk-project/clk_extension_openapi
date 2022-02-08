@@ -158,17 +158,21 @@ def format_path(path, json, query_parameters):
     return formatted_path
 
 
-def get(path, headers, json=None, query_parameters=None):
-    "Get the api"
+def http_action(path, headers=None, json=None, query_parameters=None):
+    headers = headers or {}
     json = json or {}
     query_parameters = query_parameters or {}
     inject_headers(path, headers)
     formatted_path = format_path(path, json, query_parameters)
     body_json = build_body_json(path, json)
     url = config.openapi.base_url + formatted_path
-    LOGGER.action(f"Getting {url}")
-    LOGGER.debug(f"With headers: {headers}")
-    resp = requests.get(
+    LOGGER.action(f"{config.openapi_current.method} {url}")
+    if headers:
+        LOGGER.debug(f"With headers: {headers}")
+    if body_json:
+        LOGGER.debug(f"With json: {body_json}")
+    method = getattr(requests, config.openapi_current.method)
+    resp = method(
         url,
         verify=config.openapi.verify,
         headers=headers,
@@ -296,7 +300,10 @@ def _get(path, arguments):
         for parameter in arguments if "?" in parameter
     }
     echo_result(
-        get(path, headers, json=json, query_parameters=query_parameters))
+        http_action(path,
+                    headers,
+                    json=json,
+                    query_parameters=query_parameters))
 
 
 def build_body_json(path, json):
@@ -306,23 +313,6 @@ def build_body_json(path, json):
                                get_properties(path).get(key, {}).get("type"))
         for key, value in json.items() if key in get_properties(path)
     }
-
-
-def post(path, json, headers=None, query_parameters=None):
-    "post the api"
-    headers = headers or {}
-    query_parameters = query_parameters or {}
-    inject_headers(path, headers)
-    formatted_path = format_path(path, json, query_parameters)
-    body_json = build_body_json(path, json)
-    LOGGER.action(f"Posting to {formatted_path}")
-    resp = requests.post(
-        config.openapi.base_url + formatted_path,
-        verify=config.openapi.verify,
-        json=body_json,
-        headers=headers,
-    )
-    return handle_resp(resp)
 
 
 class PostRessource(DynamicChoice):
@@ -467,25 +457,7 @@ def _post(path, params):
     for param in params:
         if param["type"] == "value":
             values.update(param["value"])
-    echo_result(post(path, headers=headers, json=values))
-
-
-def patch(path, json, headers=None, query_parameters=None):
-    "patch to the api"
-    headers = headers or {}
-    query_parameters = query_parameters or {}
-    inject_headers(path, headers)
-    formatted_path = format_path(path, json, query_parameters)
-    body_json = build_body_json(path, json)
-    LOGGER.action(f"Patching to {formatted_path}")
-
-    resp = requests.patch(
-        config.openapi.base_url + formatted_path,
-        verify=config.openapi.verify,
-        json=body_json,
-        headers=headers,
-    )
-    return handle_resp(resp)
+    echo_result(http_action(path, headers=headers, json=values))
 
 
 def patch_callback(ctx, attr, value):
@@ -520,26 +492,7 @@ def _patch(path, params):
     for param in params:
         if param["type"] == "value":
             values.update(param["value"])
-    echo_result(patch(path, headers=headers, json=values))
-
-
-def put(path, json, headers=None, query_parameters=None):
-    "put to the api"
-    headers = headers or {}
-    query_parameters = query_parameters or {}
-
-    inject_headers(path, headers)
-    formatted_path = format_path(path, json, query_parameters)
-    body_json = build_body_json(path, json)
-    LOGGER.action(f"Putting to {formatted_path}")
-
-    resp = requests.put(
-        config.openapi.base_url + formatted_path,
-        verify=config.openapi.verify,
-        json=body_json,
-        headers=headers,
-    )
-    return handle_resp(resp)
+    echo_result(http_action(path, headers=headers, json=values))
 
 
 def put_callback(ctx, attr, value):
@@ -574,7 +527,7 @@ def _put(path, params):
     for param in params:
         if param["type"] == "value":
             values.update(param["value"])
-    echo_result(put(path, headers=headers, json=values))
+    echo_result(http_action(path, headers=headers, json=values))
 
 
 @openapi.command()
