@@ -164,7 +164,7 @@ def get(path, headers, json=None, query_parameters=None):
     query_parameters = query_parameters or {}
     inject_headers(path, headers)
     formatted_path = format_path(path, json, query_parameters)
-
+    body_json = build_body_json(path, json)
     url = config.openapi.base_url + formatted_path
     LOGGER.action(f"Getting {url}")
     LOGGER.debug(f"With headers: {headers}")
@@ -172,6 +172,7 @@ def get(path, headers, json=None, query_parameters=None):
         url,
         verify=config.openapi.verify,
         headers=headers,
+        json=body_json,
     )
     return handle_resp(resp)
 
