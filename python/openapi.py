@@ -21,6 +21,11 @@ LOGGER = get_logger(__name__)
 
 
 class OpenApi:
+
+    @property
+    def verify(self):
+        return not self.no_verify
+
     @property
     def bearer(self):
         if not self._bearer:
@@ -53,10 +58,9 @@ class OpenApi:
 )
 @param_config(
     "openapi",
-    "--verify/--no-verify",
+    "--no-verify/--verify",
     typ=OpenApi,
     kls=flag,
-    default=True,
     help="Verify https",
     expose_value=True,
 )
@@ -65,9 +69,16 @@ class OpenApi:
     help=("Security token to access the API."
           " Will use the result of the command openapi.get-token by default"),
 )
-def openapi(base_url, api_url, verify, bearer):
+def openapi(base_url, api_url, no_verify, bearer):
     "Manipulate openapi"
     config.openapi._bearer = bearer
+
+    if config.openapi.no_verify:
+        # https://urllib3.readthedocs.io/en/latest/advanced-usage.html#ssl-warnings
+        # We assume the user know what per is doing because per explicitly asked
+        # not to verify
+        import urllib3
+        urllib3.disable_warnings()
 
 
 @cache_disk(expire=3600)
