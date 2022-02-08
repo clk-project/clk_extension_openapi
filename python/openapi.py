@@ -136,6 +136,18 @@ def inject_headers(path, headers, verb):
             headers[header] = config.openapi.bearer
 
 
+def handle_resp(resp):
+    if config.openapi.resp_as_text:
+        return resp.text
+    else:
+        try:
+            return resp.json()
+        except (JSONDecodeError, SimplejsonJSONDecodeError):
+            raise click.UsageError(
+                "Cannot interpret the following as json in the"
+                f" post answer: '{resp.text}'")
+
+
 def get(path, headers, json=None, query_parameters=None):
     "Get the api"
     json = json or {}
@@ -156,15 +168,7 @@ def get(path, headers, json=None, query_parameters=None):
         verify=config.openapi.verify,
         headers=headers,
     )
-    if config.openapi.resp_as_text:
-        return resp.text
-    else:
-        try:
-            return resp.json()
-        except (JSONDecodeError, SimplejsonJSONDecodeError):
-            raise click.UsageError(
-                "Cannot interpret the following as json in the"
-                f" post answer: '{resp.text}'")
+    return handle_resp(resp)
 
 
 @openapi.command()
@@ -306,15 +310,7 @@ def post(path, json, headers=None):
         json=json,
         headers=headers,
     )
-    if config.openapi.resp_as_text:
-        return resp.text
-    else:
-        try:
-            return resp.json()
-        except (JSONDecodeError, SimplejsonJSONDecodeError):
-            raise click.UsageError(
-                "Cannot interpret the following as json in the"
-                f" post answer: '{resp.text}'")
+    return handle_resp(resp)
 
 
 class PostRessource(DynamicChoice):
@@ -481,15 +477,7 @@ def patch(path, json, headers=None):
         json=json,
         headers=headers,
     )
-    if config.openapi.resp_as_text:
-        return resp.text
-    else:
-        try:
-            return resp.json()
-        except (JSONDecodeError, SimplejsonJSONDecodeError):
-            raise click.UsageError(
-                "Cannot interpret the following as json in the"
-                f" post answer: '{resp.text}'")
+    return handle_resp(resp)
 
 
 def patch_callback(ctx, attr, value):
@@ -546,15 +534,7 @@ def put(path, json, headers=None):
         json=json,
         headers=headers,
     )
-    if config.openapi.resp_as_text:
-        return resp.text
-    else:
-        try:
-            return resp.json()
-        except (JSONDecodeError, SimplejsonJSONDecodeError):
-            raise click.UsageError(
-                "Cannot interpret the following as json in the"
-                f" post answer: '{resp.text}'")
+    return handle_resp(resp)
 
 
 def put_callback(ctx, attr, value):
