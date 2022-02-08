@@ -53,6 +53,14 @@ class OpenApi:
 )
 @param_config(
     "openapi",
+    "--bearer-token-headers",
+    typ=OpenApi,
+    help="In what header values we should put the bearer token",
+    multiple=True,
+    expose_value=True,
+)
+@param_config(
+    "openapi",
     "--base-url",
     typ=OpenApi,
     help="The url of the base of the site",
@@ -86,7 +94,7 @@ class OpenApi:
     help=("Security token to access the API."
           " Will use the result of the command openapi.get-token by default"),
 )
-def openapi(base_url, api_url, no_verify, bearer):
+def openapi(base_url, api_url, no_verify, bearer, bearer_token_headers):
     "Manipulate openapi"
     config.openapi._bearer = bearer
 
@@ -120,9 +128,13 @@ def get(path, headers, json=None, query_parameters=None):
     "Get the api"
     json = json or {}
     query_parameters = query_parameters or {}
-    if "security" in api()["paths"][path]["get"]:
-        if config.openapi.bearer:
-            headers["Authorization"] = "Bearer " + config.openapi.bearer
+    security_headers = list(config.openapi.bearer_token_headers)
+    for security in api()["paths"][path]["get"].get("security", []):
+        security_headers.extend(security.keys())
+    for header in security_headers:
+        headers[header] = config.openapi.bearer
+        headers[header] = "Bearer " + config.openapi.bearer
+
     formatted_path = path.format(**json)
     if query_parameters:
         formatted_path += "?"
@@ -273,9 +285,12 @@ def _get(path, arguments):
 def post(path, json, headers=None):
     "post the api"
     headers = headers or {}
-    if "security" in api()["paths"][path]["post"]:
-        if config.openapi.bearer:
-            headers["Authorization"] = "Bearer " + config.openapi.bearer
+    security_headers = list(config.openapi.bearer_token_headers)
+    for security in api()["paths"][path]["post"].get("security", []):
+        security_headers.extend(security.keys())
+    for header in security_headers:
+        headers[header] = config.openapi.bearer
+        headers[header] = "Bearer " + config.openapi.bearer
     formatted_path = path.format(**json)
     json = {
         key: value
@@ -448,9 +463,12 @@ def _post(path, params):
 def patch(path, json, headers=None):
     "patch to the api"
     headers = headers or {}
-    if "security" in api()["paths"][path][config.openapi_current.method]:
-        if config.openapi.bearer:
-            headers["Authorization"] = "Bearer " + config.openapi.bearer
+    security_headers = list(config.openapi.bearer_token_headers)
+    for security in api()["paths"][path]["patch"].get("security", []):
+        security_headers.extend(security.keys())
+    for header in security_headers:
+        headers[header] = config.openapi.bearer
+        headers[header] = "Bearer " + config.openapi.bearer
     formatted_path = path.format(**json)
     json = {
         key: parse_value_properties(
@@ -515,11 +533,12 @@ def _patch(path, params):
 def put(path, json, headers=None):
     "put to the api"
     headers = headers or {}
-    if "security" in api()["paths"][path][config.openapi_current.method]:
-        if config.openapi.bearer:
-            headers["x-jwt-assertion"] = config.openapi.bearer
-        if config.openapi.bearer:
-            headers["Authorization"] = "Bearer " + config.openapi.bearer
+    security_headers = list(config.openapi.bearer_token_headers)
+    for security in api()["paths"][path]["put"].get("security", []):
+        security_headers.extend(security.keys())
+    for header in security_headers:
+        headers[header] = config.openapi.bearer
+        headers[header] = "Bearer " + config.openapi.bearer
     formatted_path = path.format(**json)
     json = {
         key: parse_value_properties(
