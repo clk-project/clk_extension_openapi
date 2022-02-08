@@ -98,6 +98,15 @@ def api():
     return result
 
 
+@openapi.command()
+@table_format(default='key_value')
+@table_fields(choices=['description', 'url'])
+def list_servers_urls(format, fields):
+    """Show the servers that you might want to provide as base"""
+    with TablePrinter(fields, format) as tp:
+        tp.echo_records(api()["servers"])
+
+
 def get(path, headers, json=None, query_parameters=None):
     "Get the api"
     json = json or {}
