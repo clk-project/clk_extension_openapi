@@ -124,16 +124,23 @@ def list_servers_urls(format, fields):
         tp.echo_records(api()["servers"])
 
 
+def inject_headers(path, headers, verb):
+    security_headers = list(config.openapi.bearer_token_headers)
+    for security in api()["paths"][path][verb].get("security", []):
+        security_headers.extend(security.keys())
+    for header in security_headers:
+        if header == "Authorization":
+            # follow the OAuth 2.0 standard, see https://datatracker.ietf.org/doc/html/rfc6750#section-2.1
+            headers[header] = "Bearer " + config.openapi.bearer
+        else:
+            headers[header] = config.openapi.bearer
+
+
 def get(path, headers, json=None, query_parameters=None):
     "Get the api"
     json = json or {}
     query_parameters = query_parameters or {}
-    security_headers = list(config.openapi.bearer_token_headers)
-    for security in api()["paths"][path]["get"].get("security", []):
-        security_headers.extend(security.keys())
-    for header in security_headers:
-        headers[header] = config.openapi.bearer
-        headers[header] = "Bearer " + config.openapi.bearer
+    inject_headers(path, headers, "get")
 
     formatted_path = path.format(**json)
     if query_parameters:
@@ -285,12 +292,7 @@ def _get(path, arguments):
 def post(path, json, headers=None):
     "post the api"
     headers = headers or {}
-    security_headers = list(config.openapi.bearer_token_headers)
-    for security in api()["paths"][path]["post"].get("security", []):
-        security_headers.extend(security.keys())
-    for header in security_headers:
-        headers[header] = config.openapi.bearer
-        headers[header] = "Bearer " + config.openapi.bearer
+    inject_headers(path, headers, "post")
     formatted_path = path.format(**json)
     json = {
         key: value
@@ -463,12 +465,7 @@ def _post(path, params):
 def patch(path, json, headers=None):
     "patch to the api"
     headers = headers or {}
-    security_headers = list(config.openapi.bearer_token_headers)
-    for security in api()["paths"][path]["patch"].get("security", []):
-        security_headers.extend(security.keys())
-    for header in security_headers:
-        headers[header] = config.openapi.bearer
-        headers[header] = "Bearer " + config.openapi.bearer
+    inject_headers(path, headers, "patch")
     formatted_path = path.format(**json)
     json = {
         key: parse_value_properties(
@@ -533,12 +530,7 @@ def _patch(path, params):
 def put(path, json, headers=None):
     "put to the api"
     headers = headers or {}
-    security_headers = list(config.openapi.bearer_token_headers)
-    for security in api()["paths"][path]["put"].get("security", []):
-        security_headers.extend(security.keys())
-    for header in security_headers:
-        headers[header] = config.openapi.bearer
-        headers[header] = "Bearer " + config.openapi.bearer
+    inject_headers(path, headers, "put")
     formatted_path = path.format(**json)
     json = {
         key: parse_value_properties(
