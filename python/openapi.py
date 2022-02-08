@@ -207,18 +207,6 @@ class GetRessource(DynamicChoice):
         return openapi_get_keys()
 
 
-def get_get_parameters(path):
-    api_ = api()
-    path_data = api_["paths"][path]["get"]
-    parameters = path_data.get("parameters", [])
-    for parameter in parameters:
-        schema = parameter["schema"]
-        if "$ref" in schema:
-            ref = schema["$ref"]
-            parameter["schema"] = dict_json_path(api_, ref)
-    return parameters
-
-
 class Header(DynamicChoice):
 
     def choices(self):
@@ -230,34 +218,6 @@ class Header(DynamicChoice):
         return keys
 
     def convert(self, value, param, ctx):
-        return value
-
-
-class GetParameters(Header):
-
-    def choices(self):
-        keys = super().choices()
-        if not hasattr(config.openapi_current, "given_value"):
-            config.openapi_current.given_value = set()
-
-        parameters = get_get_parameters(config.openapi_current.path)
-
-        def separator(parameter):
-            if parameter.get("in") == "query":
-                return "?"
-            else:
-                return "="
-
-        return [
-            parameter["name"] + separator(parameter)
-            for parameter in parameters
-            if not parameter["name"] in config.openapi_current.given_value
-        ] + keys
-
-    def convert(self, value, param, ctx):
-        if not hasattr(config.openapi_current, "given_value"):
-            config.openapi_current.given_value = set()
-        config.openapi_current.given_value.add(value.split("=")[0])
         return value
 
 
@@ -276,6 +236,79 @@ def echo_result(result):
             echo_json(result)
 
 
+class HTTPPropertiesResource(Header):
+
+    def choices(self):
+        keys = super().choices()
+        if not hasattr(config.openapi_current, "given_value"):
+            config.openapi_current.given_value = set()
+        properties = get_openapi_properties(config.openapi_current.path)
+        parameters = get_openapi_parameters(config.openapi_current.path)
+
+        def separator(parameter):
+            if parameter.get("in") == "query":
+                return "?"
+            else:
+                return "="
+
+        return [
+            parameter["name"] + separator(parameter)
+            for parameter in parameters
+            if not parameter["name"] in config.openapi_current.given_value
+        ] + [
+            key + "=" for key in properties.keys()
+            if key not in config.openapi_current.given_value
+        ] + keys
+
+    def convert(self, value, param, ctx):
+        if not hasattr(config.openapi_current, "given_value"):
+            config.openapi_current.given_value = set()
+        config.openapi_current.given_value.add(value.split("=")[0])
+        res = {}
+        if value.startswith("@"):
+            filepath = value[len("@"):]
+            values = json.loads(Path(filepath).read_text())
+            res["value"] = values
+            res["type"] = "value"
+        elif "=@" in value:
+            key, value = value.split("=")
+            filepath = value[len("@"):]
+            value = json.loads(Path(filepath).read_text())
+            res["type"] = "value"
+            res["value"] = {key: value}
+            return key, value
+        elif "=" in value:
+            key, value = value.split("=")
+            value = parse_value(value)
+            res["type"] = "value"
+            res["value"] = {key: value}
+        elif ":" in value:
+            key, value = value.split(":")
+            res["type"] = "header"
+            res["value"] = {key: value}
+        elif "?" in value:
+            key, value = value.split("?")
+            res["type"] = "query"
+            res["value"] = {key: value}
+        else:
+            raise NotImplementedError()
+        return res
+
+
+def arguments_to_properties(arguments):
+    headers = {}
+    json = {}
+    query_parameters = {}
+    type_to_dict = {
+        "value": json,
+        "header": headers,
+        "query": query_parameters,
+    }
+    for _argument in arguments:
+        type_to_dict[_argument["type"]].update(_argument["value"])
+    return headers, json, query_parameters
+
+
 @openapi.command()
 @param_config(
     "openapi_current",
@@ -292,25 +325,14 @@ def echo_result(result):
     kls=argument,
     expose_value=True,
     help="Some header argument",
-    type=GetParameters(),
+    type=HTTPPropertiesResource(),
     nargs=-1,
 )
 def _get(path, arguments):
     """Get the given path"""
-    headers = {
-        header.split(":")[0]: header.split(":")[1]
-        for header in arguments if ":" in header
-    }
-    json = {
-        parameter.split("=")[0]: parameter.split("=")[1]
-        for parameter in arguments if "=" in parameter
-    }
-    query_parameters = {
-        parameter.split("?")[0]: parameter.split("?")[1]
-        for parameter in arguments if "?" in parameter
-    }
+    headers, json, query_parameters = arguments_to_properties(arguments)
     echo_result(HTTPAction()(path,
-                             headers,
+                             headers=headers,
                              json=json,
                              query_parameters=query_parameters))
 
@@ -364,53 +386,6 @@ def get_openapi_parameters(path):
     return parameters
 
 
-class HTTPPropertiesResource(Header):
-
-    def choices(self):
-        keys = super().choices()
-        if not hasattr(config.openapi_current, "given_value"):
-            config.openapi_current.given_value = set()
-        properties = get_openapi_properties(config.openapi_current.path)
-        parameters = get_openapi_parameters(config.openapi_current.path)
-        return [
-            parameter["name"] + "=" for parameter in parameters
-            if not parameter["name"] in config.openapi_current.given_value
-        ] + [
-            key + "=" for key in properties.keys()
-            if key not in config.openapi_current.given_value
-        ] + keys
-
-    def convert(self, value, param, ctx):
-        if not hasattr(config.openapi_current, "given_value"):
-            config.openapi_current.given_value = set()
-        config.openapi_current.given_value.add(value.split("=")[0])
-        res = {}
-        if value.startswith("@"):
-            filepath = value[len("@"):]
-            values = json.loads(Path(filepath).read_text())
-            res["value"] = values
-            res["type"] = "value"
-        elif "=@" in value:
-            key, value = value.split("=")
-            filepath = value[len("@"):]
-            value = json.loads(Path(filepath).read_text())
-            res["type"] = "value"
-            res["value"] = {key: value}
-            return key, value
-        elif "=" in value:
-            key, value = value.split("=")
-            value = parse_value(value)
-            res["type"] = "value"
-            res["value"] = {key: value}
-        elif ":" in value:
-            key, value = value.split(":")
-            res["type"] = "header"
-            res["value"] = {key: value}
-        else:
-            raise NotImplementedError()
-        return res
-
-
 def parse_value(value):
     if value.startswith("[") or value.startswith("{") or value.startswith('"'):
         return json.loads(value)
@@ -449,15 +424,11 @@ def post_callback(ctx, attr, value):
               expose_value=True)
 def _post(path, params):
     """post to the given path"""
-    headers = {}
-    for param in params:
-        if param["type"] == "header":
-            headers.update(param["value"])
-    values = {}
-    for param in params:
-        if param["type"] == "value":
-            values.update(param["value"])
-    echo_result(HTTPAction()(path, headers=headers, json=values))
+    headers, json, query_parameters = arguments_to_properties(params)
+    echo_result(HTTPAction()(path,
+                             headers=headers,
+                             json=json,
+                             query_parameters=query_parameters))
 
 
 def patch_callback(ctx, attr, value):
@@ -484,15 +455,11 @@ def patch_callback(ctx, attr, value):
               expose_value=True)
 def _patch(path, params):
     """post to the given path"""
-    headers = {}
-    for param in params:
-        if param["type"] == "header":
-            headers.update(param["value"])
-    values = {}
-    for param in params:
-        if param["type"] == "value":
-            values.update(param["value"])
-    echo_result(HTTPAction()(path, headers=headers, json=values))
+    headers, json, query_parameters = arguments_to_properties(params)
+    echo_result(HTTPAction()(path,
+                             headers=headers,
+                             json=json,
+                             query_parameters=query_parameters))
 
 
 def put_callback(ctx, attr, value):
@@ -519,15 +486,11 @@ def put_callback(ctx, attr, value):
               expose_value=True)
 def _put(path, params):
     """post to the given path"""
-    headers = {}
-    for param in params:
-        if param["type"] == "header":
-            headers.update(param["value"])
-    values = {}
-    for param in params:
-        if param["type"] == "value":
-            values.update(param["value"])
-    echo_result(HTTPAction()(path, headers=headers, json=values))
+    headers, json, query_parameters = arguments_to_properties(params)
+    echo_result(HTTPAction()(path,
+                             headers=headers,
+                             json=json,
+                             query_parameters=query_parameters))
 
 
 @openapi.command()
