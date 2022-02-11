@@ -106,13 +106,17 @@ def openapi(base_url, api_url, no_verify, bearer, bearer_token_headers):
         urllib3.disable_warnings()
 
 
-@cache_disk(expire=3600)
 def api():
-    result = requests.get(
-        config.openapi.api_url,
-        verify=config.openapi.verify,
-    ).json()
-    return result
+
+    @cache_disk(expire=3600)
+    def _api(url):
+        result = requests.get(
+            url,
+            verify=config.openapi.verify,
+        ).json()
+        return result
+
+    return _api(config.openapi.api_url)
 
 
 @openapi.command()
