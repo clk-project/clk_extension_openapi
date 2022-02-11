@@ -130,13 +130,24 @@ def list_servers_urls(format, fields):
 
 class HTTPAction:
 
-    def __init__(self, verb=None):
-        self.verb = verb or config.openapi_current.method
+    def __init__(self):
+        self.verb = config.openapi_current.method
 
-    def __call__(self, path, headers=None, json=None, query_parameters=None):
-        headers = headers or {}
-        json = json or {}
-        query_parameters = query_parameters or {}
+    def arguments_to_properties(self, arguments):
+        headers = {}
+        json = {}
+        query_parameters = {}
+        type_to_dict = {
+            "value": json,
+            "header": headers,
+            "query": query_parameters,
+        }
+        for _argument in arguments:
+            type_to_dict[_argument["type"]].update(_argument["value"])
+        return headers, json, query_parameters
+
+    def __call__(self, path, params):
+        headers, json, query_parameters = self.arguments_to_properties(params)
         self.inject_headers(path, headers)
         formatted_path = self.format_path(path, json, query_parameters)
         body_json = self.build_body_json(path, json)
@@ -299,20 +310,6 @@ class HTTPPropertiesResource(Header):
         return res
 
 
-def arguments_to_properties(arguments):
-    headers = {}
-    json = {}
-    query_parameters = {}
-    type_to_dict = {
-        "value": json,
-        "header": headers,
-        "query": query_parameters,
-    }
-    for _argument in arguments:
-        type_to_dict[_argument["type"]].update(_argument["value"])
-    return headers, json, query_parameters
-
-
 @openapi.command()
 @param_config(
     "openapi_current",
@@ -334,11 +331,7 @@ def arguments_to_properties(arguments):
 )
 def _get(path, arguments):
     """Get the given path"""
-    headers, json, query_parameters = arguments_to_properties(arguments)
-    echo_result(HTTPAction()(path,
-                             headers=headers,
-                             json=json,
-                             query_parameters=query_parameters))
+    echo_result(HTTPAction()(path, arguments))
 
 
 class OpenApiResource(DynamicChoice):
@@ -428,11 +421,7 @@ def post_callback(ctx, attr, value):
               expose_value=True)
 def _post(path, params):
     """post to the given path"""
-    headers, json, query_parameters = arguments_to_properties(params)
-    echo_result(HTTPAction()(path,
-                             headers=headers,
-                             json=json,
-                             query_parameters=query_parameters))
+    echo_result(HTTPAction()(path, params))
 
 
 def patch_callback(ctx, attr, value):
@@ -459,11 +448,7 @@ def patch_callback(ctx, attr, value):
               expose_value=True)
 def _patch(path, params):
     """post to the given path"""
-    headers, json, query_parameters = arguments_to_properties(params)
-    echo_result(HTTPAction()(path,
-                             headers=headers,
-                             json=json,
-                             query_parameters=query_parameters))
+    echo_result(HTTPAction()(path, arguments))
 
 
 def put_callback(ctx, attr, value):
@@ -490,11 +475,7 @@ def put_callback(ctx, attr, value):
               expose_value=True)
 def _put(path, params):
     """post to the given path"""
-    headers, json, query_parameters = arguments_to_properties(params)
-    echo_result(HTTPAction()(path,
-                             headers=headers,
-                             json=json,
-                             query_parameters=query_parameters))
+    echo_result(HTTPAction()(path, arguments))
 
 
 @openapi.command()
