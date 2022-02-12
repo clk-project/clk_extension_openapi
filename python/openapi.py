@@ -428,6 +428,33 @@ def parse_value_properties(value, type_):
         return value
 
 
+def delete_callback(ctx, attr, value):
+    config.openapi_current.method = "delete"
+    return value
+
+
+@openapi.command()
+@param_config(
+    "openapi_current",
+    "path",
+    kls=argument,
+    expose_value=True,
+    help="The path to delete to",
+    type=OpenApiResource("delete"),
+    callback=delete_callback,
+)
+@param_config("openapi_current",
+              "params",
+              kls=argument,
+              nargs=-1,
+              help="The arguments, separated by =",
+              type=Payload(),
+              expose_value=True)
+def _delete(path, params):
+    """delete to the given path"""
+    echo_result(HTTPAction()(path, params))
+
+
 def post_callback(ctx, attr, value):
     config.openapi_current.method = "post"
     return value
