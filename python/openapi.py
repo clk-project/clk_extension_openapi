@@ -136,20 +136,31 @@ class HTTPAction:
     def arguments_to_properties(self, arguments):
         headers = {}
         json = {}
+        path = {}
         query_parameters = {}
         type_to_dict = {
-            "value": json,
+            "body": json,
             "header": headers,
             "query": query_parameters,
+            "path": path
         }
         for _argument in arguments:
             type_to_dict[_argument["type"]].update(_argument["value"])
-        return headers, json, query_parameters
+        return path, headers, json, query_parameters
 
     def __call__(self, path, params):
-        headers, json, query_parameters = self.arguments_to_properties(params)
+        (
+            path_parameters,
+            headers,
+            json,
+            query_parameters,
+        ) = self.arguments_to_properties(params)
         self.inject_headers(path, headers)
-        formatted_path = self.format_path(path, json, query_parameters)
+        formatted_path = path.format(**path_parameters)
+        if query_parameters:
+            formatted_path += "?"
+        for key, value in query_parameters.items():
+            formatted_path += f"{key}={value}"
         body_json = self.build_body_json(path, json)
         url = config.openapi.base_url + formatted_path
         LOGGER.action(f"{self.verb} {url}")
@@ -167,12 +178,16 @@ class HTTPAction:
         return self.handle_resp(resp)
 
     def build_body_json(self, path, json):
+        body_param = {
+            param["name"]: param["schema"]["type"]
+            for param in get_openapi_parameters(path) if param["in"] == "body"
+        }
         return {
             key: parse_value_properties(
                 value,
-                get_openapi_properties(path).get(key, {}).get("type"))
+                body_param[key],
+            )
             for key, value in json.items()
-            if key in get_openapi_properties(path)
         }
 
     def inject_headers(self, path, headers):
@@ -196,14 +211,6 @@ class HTTPAction:
                 raise click.UsageError(
                     "Cannot interpret the following as json in the"
                     f" post answer: '{resp.text}'")
-
-    def format_path(self, path, json, query_parameters):
-        formatted_path = path.format(**json)
-        if query_parameters:
-            formatted_path += "?"
-        for key, value in query_parameters.items():
-            formatted_path += f"{key}={value}"
-        return formatted_path
 
 
 @openapi.command()
@@ -251,28 +258,28 @@ def echo_result(result):
             echo_json(result)
 
 
-class HTTPPropertiesResource(Header):
+class Payload(Header):
+
+    parameter_to_separator = {
+        "query": "&",
+        "body": "=",
+        "path": "?",
+    }
+    separator_to_parameter = {
+        value: key
+        for key, value in parameter_to_separator.items()
+    }
 
     def choices(self):
         keys = super().choices()
         if not hasattr(config.openapi_current, "given_value"):
             config.openapi_current.given_value = set()
-        properties = get_openapi_properties(config.openapi_current.path)
         parameters = get_openapi_parameters(config.openapi_current.path)
 
-        def separator(parameter):
-            if parameter.get("in") == "query":
-                return "?"
-            else:
-                return "="
-
         return [
-            parameter["name"] + separator(parameter)
+            parameter["name"] + self.parameter_to_separator[parameter["in"]]
             for parameter in parameters
             if not parameter["name"] in config.openapi_current.given_value
-        ] + [
-            key + "=" for key in properties.keys()
-            if key not in config.openapi_current.given_value
         ] + keys
 
     def convert(self, value, param, ctx):
@@ -292,21 +299,15 @@ class HTTPPropertiesResource(Header):
             res["type"] = "value"
             res["value"] = {key: value}
             return key, value
-        elif "=" in value:
-            key, value = value.split("=")
-            value = parse_value(value)
-            res["type"] = "value"
-            res["value"] = {key: value}
-        elif ":" in value:
-            key, value = value.split(":")
-            res["type"] = "header"
-            res["value"] = {key: value}
-        elif "?" in value:
-            key, value = value.split("?")
-            res["type"] = "query"
-            res["value"] = {key: value}
         else:
-            raise NotImplementedError()
+            for separator, name in self.separator_to_parameter.items():
+                if separator in value:
+                    key, value = value.split(separator)
+                    res["type"] = self.separator_to_parameter[separator]
+                    res["value"] = {key: value}
+                    break
+            else:
+                raise NotImplementedError()
         return res
 
 
@@ -326,7 +327,7 @@ class HTTPPropertiesResource(Header):
     kls=argument,
     expose_value=True,
     help="Some header argument",
-    type=HTTPPropertiesResource(),
+    type=Payload(),
     nargs=-1,
 )
 def _get(path, arguments):
@@ -359,7 +360,7 @@ def dict_json_path(dict, json_path):
     return dict
 
 
-def get_openapi_properties(path):
+def get_openapi_body(path):
     api_ = api()
     path_data = api_["paths"][path][config.openapi_current.method]
     if "requestBody" not in path_data:
@@ -375,12 +376,36 @@ def get_openapi_parameters(path):
     api_ = api()
     path_data = api_["paths"][path][config.openapi_current.method]
     parameters = path_data.get("parameters", [])
+    # get the body in a normal parameter
+    if body := get_openapi_body(path):
+        for name, schem in body.items():
+            parameters.append({
+                "in": "body",
+                "name": name,
+                "schema": schema,
+            })
+
+    parameters2 = []
     for parameter in parameters:
-        schema = parameter["schema"]
-        if "$ref" in schema:
-            ref = schema["$ref"]
-            parameter["schema"] = dict_json_path(api_, ref)
-    return parameters
+        if "schema" in parameter:
+            schema = parameter["schema"]
+            if "$ref" in schema:
+                ref = schema["$ref"]
+                parameter["schema"] = dict_json_path(api_, ref)
+        else:
+            parameter["schema"] = {"type": parameter["type"]}
+        if parameter["in"] == "body" and parameter["schema"][
+                "type"] == "object":
+            for name, type in parameter["schema"]["properties"].items():
+                parameters2.append({
+                    "in": "body",
+                    "name": name,
+                    "schema": type
+                })
+        else:
+            parameters2.append(parameter)
+
+    return parameters2
 
 
 def parse_value(value):
@@ -393,6 +418,12 @@ def parse_value(value):
 def parse_value_properties(value, type_):
     if type_ == "number":
         return int(value)
+    elif type_ == "boolean":
+        if value in ["true"]:
+            return True
+        if value in ["false"]:
+            return False
+        raise NotImplementedError()
     else:
         return value
 
@@ -417,7 +448,7 @@ def post_callback(ctx, attr, value):
               kls=argument,
               nargs=-1,
               help="The arguments, separated by =",
-              type=HTTPPropertiesResource(),
+              type=Payload(),
               expose_value=True)
 def _post(path, params):
     """post to the given path"""
@@ -444,7 +475,7 @@ def patch_callback(ctx, attr, value):
               kls=argument,
               nargs=-1,
               help="The arguments, separated by =",
-              type=HTTPPropertiesResource(),
+              type=Payload(),
               expose_value=True)
 def _patch(path, params):
     """post to the given path"""
@@ -471,7 +502,7 @@ def put_callback(ctx, attr, value):
               kls=argument,
               nargs=-1,
               help="The arguments, separated by =",
-              type=HTTPPropertiesResource(),
+              type=Payload(),
               expose_value=True)
 def _put(path, params):
     """post to the given path"""
@@ -490,7 +521,6 @@ def _put(path, params):
 def describe_post(path):
     """Show the expected properties of the given path."""
     config.openapi_current.method = "post"
-    properties = get_openapi_properties(path)
     parameters = get_openapi_parameters(path)
 
     def dump_desc(desc):
@@ -525,11 +555,8 @@ def describe_post(path):
 
     for parameter in parameters:
         print(f"{parameter['name']}:")
+        print(f"  in: {parameter['in']}")
         print(dump_desc(parameter["schema"]))
-
-    for property, desc in properties.items():
-        print(f"{property}:")
-        print(dump_desc(desc))
 
 
 @openapi.command()
