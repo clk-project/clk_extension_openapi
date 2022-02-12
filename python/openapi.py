@@ -378,7 +378,7 @@ def get_openapi_parameters(path):
     parameters = path_data.get("parameters", [])
     # get the body in a normal parameter
     if body := get_openapi_body(path):
-        for name, schem in body.items():
+        for name, schema in body.items():
             parameters.append({
                 "in": "body",
                 "name": name,
