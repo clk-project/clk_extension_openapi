@@ -3,8 +3,11 @@
 import json
 from json.decoder import JSONDecodeError
 from pathlib import Path
+from sys import stdin
 from textwrap import indent
 
+from jsonschema import validate, ValidationError
+from openapi_schema_to_json_schema import to_json_schema
 import click
 import requests
 from clk.config import config
@@ -19,6 +22,17 @@ from clk.types import DynamicChoice
 from simplejson.errors import JSONDecodeError as SimplejsonJSONDecodeError
 
 LOGGER = get_logger(__name__)
+
+
+def validate_schema(data, schema):
+    validate(data, to_json_schema(schema))
+
+
+def walk_dict(d):
+    for key, value in d.items():
+        yield key, value
+        if isinstance(value, dict):
+            yield from walk_dict(value)
 
 
 class OpenApi:
@@ -146,7 +160,7 @@ class HTTPAction:
         }
         for _argument in arguments:
             type_to_dict[_argument["type"]].update(_argument["value"])
-        return path, headers, json, query_parameters
+        return path, headers, json["body"], query_parameters
 
     def __call__(self, path, params):
         (
@@ -161,34 +175,20 @@ class HTTPAction:
             formatted_path += "?"
         for key, value in query_parameters.items():
             formatted_path += f"{key}={value}"
-        body_json = self.build_body_json(path, json)
         url = config.openapi.base_url + formatted_path
         LOGGER.action(f"{self.verb} {url}")
         if headers:
             LOGGER.debug(f"With headers: {headers}")
-        if body_json:
-            LOGGER.debug(f"With json: {body_json}")
+        if json:
+            LOGGER.debug(f"With json: {json}")
         method = getattr(requests, self.verb)
         resp = method(
             url,
             verify=config.openapi.verify,
             headers=headers,
-            json=body_json,
+            json=json,
         )
         return self.handle_resp(resp)
-
-    def build_body_json(self, path, json):
-        body_param = {
-            param["name"]: param["schema"]["type"]
-            for param in get_openapi_parameters(path) if param["in"] == "body"
-        }
-        return {
-            key: parse_value_properties(
-                value,
-                body_param[key],
-            )
-            for key, value in json.items()
-        }
 
     def inject_headers(self, path, headers):
         security_headers = list(config.openapi.bearer_token_headers)
@@ -287,27 +287,27 @@ class Payload(Header):
             config.openapi_current.given_value = set()
         config.openapi_current.given_value.add(value.split("=")[0])
         res = {}
-        if value.startswith("@"):
-            filepath = value[len("@"):]
-            values = json.loads(Path(filepath).read_text())
-            res["value"] = values
-            res["type"] = "value"
-        elif "=@" in value:
-            key, value = value.split("=")
-            filepath = value[len("@"):]
-            value = json.loads(Path(filepath).read_text())
-            res["type"] = "value"
-            res["value"] = {key: value}
-            return key, value
+        for separator, name in self.separator_to_parameter.items():
+            if separator in value:
+                key, value = value.split(separator)
+                if value.startswith("@"):
+                    filepath = value[len("@"):]
+                    if filepath == "-":
+                        value = stdin.read()
+                    else:
+                        value = json.loads(Path(filepath).read_text())
+                res["type"] = self.separator_to_parameter[separator]
+                break
         else:
-            for separator, name in self.separator_to_parameter.items():
-                if separator in value:
-                    key, value = value.split(separator)
-                    res["type"] = self.separator_to_parameter[separator]
-                    res["value"] = {key: value}
-                    break
-            else:
-                raise NotImplementedError()
+            raise NotImplementedError()
+        parameters = get_openapi_parameters(config.openapi_current.path)
+        for param in parameters:
+            if param["name"] == key:
+                value = parse_value_properties(value, param["schema"])
+                break
+        else:
+            raise NotImplementedError()
+        res["value"] = {key: value}
         return res
 
 
@@ -360,7 +360,7 @@ def dict_json_path(dict, json_path):
     return dict
 
 
-def get_openapi_body(path):
+def get_openapi_body_schema(path):
     api_ = api()
     path_data = api_["paths"][path][config.openapi_current.method]
     if "requestBody" not in path_data:
@@ -369,7 +369,7 @@ def get_openapi_body(path):
     if "$ref" in schema:
         ref = schema["$ref"]
         schema = dict_json_path(api_, ref)
-    return schema.get("properties", {})
+    return schema
 
 
 def get_openapi_parameters(path):
@@ -377,21 +377,31 @@ def get_openapi_parameters(path):
     path_data = api_["paths"][path][config.openapi_current.method]
     parameters = path_data.get("parameters", [])
     # get the body in a normal parameter
-    if body := get_openapi_body(path):
-        for name, schema in body.items():
+    if schema := get_openapi_body_schema(path):
+        if schema["type"] == "object":
+            for name, schema in schema["properties"].items():
+                parameters.append({
+                    "in": "body",
+                    "name": name,
+                    "schema": schema,
+                })
+        else:
             parameters.append({
                 "in": "body",
-                "name": name,
+                "name": "body",
                 "schema": schema,
+                "is_body": True
             })
 
     parameters2 = []
     for parameter in parameters:
         if "schema" in parameter:
             schema = parameter["schema"]
-            if "$ref" in schema:
-                ref = schema["$ref"]
-                parameter["schema"] = dict_json_path(api_, ref)
+            for key, value in walk_dict(schema):
+                if "$ref" in value:
+                    ref = value["$ref"]
+                    del value["$ref"]
+                    value.update(dict_json_path(api_, ref))
         else:
             parameter["schema"] = {"type": parameter["type"]}
         if parameter["in"] == "body" and parameter["schema"][
@@ -408,24 +418,13 @@ def get_openapi_parameters(path):
     return parameters2
 
 
-def parse_value(value):
-    if value.startswith("[") or value.startswith("{") or value.startswith('"'):
-        return json.loads(value)
-    else:
-        return value
-
-
-def parse_value_properties(value, type_):
-    if type_ == "number":
-        return int(value)
-    elif type_ == "boolean":
-        if value in ["true"]:
-            return True
-        if value in ["false"]:
-            return False
-        raise NotImplementedError()
-    else:
-        return value
+def parse_value_properties(value, schema):
+    try:
+        result = json.loads(value)
+        validate_schema(result, schema)
+        return result
+    except ValidationError as e:
+        raise click.UsageError(e)
 
 
 def delete_callback(ctx, attr, value):
