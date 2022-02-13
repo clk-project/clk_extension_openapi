@@ -424,6 +424,8 @@ def parse_value_properties(value, schema):
         validate_schema(result, schema)
         return result
     except ValidationError as e:
+        if schema["type"] == "string":
+            return value
         raise click.UsageError(e)
 
 
