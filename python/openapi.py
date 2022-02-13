@@ -423,7 +423,7 @@ def parse_value_properties(value, schema):
         result = json.loads(value)
         validate_schema(result, schema)
         return result
-    except ValidationError as e:
+    except (ValidationError, JSONDecodeError) as e:
         if schema["type"] == "string":
             return value
         elif schema["type"] == "boolean":
