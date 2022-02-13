@@ -395,14 +395,12 @@ def get_openapi_parameters(path):
 
     parameters2 = []
     for parameter in parameters:
-        if "schema" in parameter:
-            schema = parameter["schema"]
-            for key, value in walk_dict(schema):
-                if "$ref" in value:
-                    ref = value["$ref"]
-                    del value["$ref"]
-                    value.update(dict_json_path(api_, ref))
-        else:
+        for key, value in walk_dict(parameter):
+            if isinstance(value, dict) and "$ref" in value:
+                ref = value["$ref"]
+                del value["$ref"]
+                value.update(dict_json_path(api_, ref))
+        if "schema" not in parameter:
             parameter["schema"] = {"type": parameter["type"]}
         if parameter["in"] == "body" and parameter["schema"][
                 "type"] == "object":
