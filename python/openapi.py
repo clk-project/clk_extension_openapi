@@ -431,6 +431,7 @@ def parse_value_properties(value, schema):
                 return True
             elif value in ("0", "False", "false"):
                 return False
+        LOGGER.critical(f"While parsing: {value}, with schema: {schema}")
         raise click.UsageError(e)
 
 
