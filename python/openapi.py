@@ -160,7 +160,7 @@ class HTTPAction:
         }
         for _argument in arguments:
             type_to_dict[_argument["type"]].update(_argument["value"])
-        return path, headers, json["body"], query_parameters
+        return path, headers, json.get("body"), query_parameters
 
     def __call__(self, path, params):
         (
