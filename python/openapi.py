@@ -160,7 +160,9 @@ class HTTPAction:
         }
         for _argument in arguments:
             type_to_dict[_argument["type"]].update(_argument["value"])
-        return path, headers, json.get("body"), query_parameters
+        if len(json) == 1 and "body" in json:
+            json = json["body"]
+        return path, headers, json, query_parameters
 
     def __call__(self, path, params):
         (
@@ -424,6 +426,11 @@ def parse_value_properties(value, schema):
     except ValidationError as e:
         if schema["type"] == "string":
             return value
+        elif schema["type"] == "boolean":
+            if value in ("1", "True", "true"):
+                return True
+            elif value in ("0", "False", "false"):
+                return False
         raise click.UsageError(e)
 
 
