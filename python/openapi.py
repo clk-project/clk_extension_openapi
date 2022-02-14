@@ -549,12 +549,30 @@ def _put(path, params):
     "path",
     kls=argument,
     expose_value=True,
-    help="The path to post to",
+    help="The path to describe",
     type=OpenApiResource("post"),
 )
 def describe_post(path):
     """Show the expected properties of the given path."""
-    config.openapi_current.method = "post"
+    describe_api("post", path)
+
+
+@openapi.command()
+@param_config(
+    "openapi_current",
+    "path",
+    kls=argument,
+    expose_value=True,
+    help="The path to describe",
+    type=OpenApiResource("get"),
+)
+def describe_get(path):
+    """Show the expected properties of the given path."""
+    describe_api("get", path)
+
+
+def describe_api(method, path):
+    config.openapi_current.method = method
     parameters = get_openapi_parameters(path)
 
     def dump_desc(desc):
