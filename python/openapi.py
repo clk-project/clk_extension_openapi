@@ -539,8 +539,8 @@ def put_callback(ctx, attr, value):
               type=Payload(),
               expose_value=True)
 def _put(path, params):
-    """post to the given path"""
-    echo_result(HTTPAction()(path, arguments))
+    """put to the given path"""
+    echo_result(HTTPAction()(path, params))
 
 
 @openapi.command()
