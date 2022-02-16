@@ -286,10 +286,14 @@ class Payload(Header):
         ] + keys
 
     def convert(self, value, param, ctx):
-        return self.convert_value(value, config.openapi_current.path)
+        return self.convert_value(
+            value,
+            config.openapi_current.path,
+            config.openapi_current.method,
+        )
 
     @classmethod
-    def convert_value(clk, value, path):
+    def convert_value(clk, value, path, method):
         if not hasattr(config.openapi_current, "given_value"):
             config.openapi_current.given_value = set()
         config.openapi_current.given_value.add(value.split("=")[0])
@@ -307,10 +311,7 @@ class Payload(Header):
                 break
         else:
             raise NotImplementedError()
-        parameters = get_openapi_parameters(
-            path,
-            config.openapi_current.method,
-        )
+        parameters = get_openapi_parameters(path, method)
         for param in parameters:
             if param["name"] == key:
                 value = parse_value_properties(value, param["schema"])
@@ -373,9 +374,9 @@ def dict_json_path(dict, json_path):
     return dict
 
 
-def get_openapi_body_schema(path):
+def get_openapi_body_schema(path, method):
     api_ = api()
-    path_data = api_["paths"][path][config.openapi_current.method]
+    path_data = api_["paths"][path][method]
     if "requestBody" not in path_data:
         return {}
     schema = path_data["requestBody"]["content"]["application/json"]["schema"]
@@ -390,7 +391,7 @@ def get_openapi_parameters(path, method):
     path_data = api_["paths"][path][method]
     parameters = path_data.get("parameters", [])
     # get the body in a normal parameter
-    if schema := get_openapi_body_schema(path):
+    if schema := get_openapi_body_schema(path, method):
         if schema["type"] == "object":
             for name, schema in schema["properties"].items():
                 parameters.append({
