@@ -276,7 +276,8 @@ class Payload(Header):
         keys = super().choices()
         if not hasattr(config.openapi_current, "given_value"):
             config.openapi_current.given_value = set()
-        parameters = get_openapi_parameters(config.openapi_current.path)
+        parameters = get_openapi_parameters(config.openapi_current.path,
+                                            config.openapi_current.method)
 
         return [
             parameter["name"] + self.parameter_to_separator[parameter["in"]]
@@ -285,10 +286,10 @@ class Payload(Header):
         ] + keys
 
     def convert(self, value, param, ctx):
-        return self.convert_value(value)
+        return self.convert_value(value, config.openapi_current.path)
 
     @classmethod
-    def convert_value(clk, value):
+    def convert_value(clk, value, path):
         if not hasattr(config.openapi_current, "given_value"):
             config.openapi_current.given_value = set()
         config.openapi_current.given_value.add(value.split("=")[0])
@@ -306,7 +307,10 @@ class Payload(Header):
                 break
         else:
             raise NotImplementedError()
-        parameters = get_openapi_parameters(config.openapi_current.path)
+        parameters = get_openapi_parameters(
+            path,
+            config.openapi_current.method,
+        )
         for param in parameters:
             if param["name"] == key:
                 value = parse_value_properties(value, param["schema"])
@@ -378,9 +382,9 @@ def get_openapi_body_schema(path):
     return schema
 
 
-def get_openapi_parameters(path):
+def get_openapi_parameters(path, method):
     api_ = api()
-    path_data = api_["paths"][path][config.openapi_current.method]
+    path_data = api_["paths"][path][method]
     parameters = path_data.get("parameters", [])
     # get the body in a normal parameter
     if schema := get_openapi_body_schema(path):
@@ -577,7 +581,7 @@ def describe_get(path):
 
 def describe_api(method, path):
     config.openapi_current.method = method
-    parameters = get_openapi_parameters(path)
+    parameters = get_openapi_parameters(path, method)
 
     def dump_desc(desc):
         indentation = "  "
