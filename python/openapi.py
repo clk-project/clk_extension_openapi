@@ -254,20 +254,6 @@ class GetRessource(DynamicChoice):
         return openapi_get_keys()
 
 
-class Header(DynamicChoice):
-
-    def choices(self):
-        api_ = api()
-        parameters = api_["paths"][config.openapi_current.path][
-            config.openapi_current.method]
-        security = parameters.get("security", {})
-        keys = sum([[key + ":" for key in sec.keys()] for sec in security], [])
-        return keys
-
-    def convert(self, value, param, ctx):
-        return value
-
-
 def get_callback(ctx, attr, value):
     config.openapi_current.method = "get"
     return value
@@ -283,12 +269,13 @@ def echo_result(result):
             echo_json(result)
 
 
-class Payload(Header):
+class Payload(DynamicChoice):
 
     parameter_to_separator = {
         "query": "&",
         "body": "=",
         "path": "?",
+        "header": ":",
     }
     separator_to_parameter = {
         value: key
@@ -296,7 +283,6 @@ class Payload(Header):
     }
 
     def choices(self):
-        keys = super().choices()
         if not hasattr(config.openapi_current, "given_value"):
             config.openapi_current.given_value = set()
         parameters = get_openapi_parameters(config.openapi_current.path,
@@ -306,7 +292,7 @@ class Payload(Header):
             parameter["name"] + self.parameter_to_separator[parameter["in"]]
             for parameter in parameters
             if not parameter["name"] in config.openapi_current.given_value
-        ] + keys
+        ]
 
     def convert(self, value, param, ctx):
         return self.convert_value(
@@ -412,6 +398,23 @@ def get_openapi_body_schema(path, method):
     return schema
 
 
+def get_security_schemes():
+    return api()["components"]["securitySchemes"]
+
+
+def get_security_params(path, method):
+    api_ = api()
+    path_data = api_["paths"][path][method]
+    schemes = get_security_schemes()
+    for security in path_data["security"]:
+        for key in security.keys():
+            scheme = schemes[key]
+            if scheme["type"] == "apiKey":
+                scheme = scheme.copy()
+                scheme["schema"] = {"type": "string"}
+                yield scheme
+
+
 def get_openapi_parameters(path, method):
     api_ = api()
     path_data = api_["paths"][path][method]
@@ -452,7 +455,7 @@ def get_openapi_parameters(path, method):
                 })
         else:
             parameters2.append(parameter)
-
+    parameters2.extend(get_security_params(path, method))
     return parameters2
 
 
