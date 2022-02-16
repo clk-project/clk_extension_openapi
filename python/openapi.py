@@ -108,9 +108,23 @@ class OpenApi:
     help=("Security token to access the API."
           " Will use the result of the command openapi.get-token by default"),
 )
-def openapi(base_url, api_url, no_verify, bearer, bearer_token_headers):
+@option(
+    "-p",
+    "--parameter",
+    help="Parameter used in all the calls.",
+    multiple=True,
+)
+def openapi(
+    base_url,
+    api_url,
+    no_verify,
+    bearer,
+    bearer_token_headers,
+    parameter,
+):
     "Manipulate openapi"
     config.openapi._bearer = bearer
+    config.openapi.parameters = parameter
 
     if config.openapi.no_verify:
         # https://urllib3.readthedocs.io/en/latest/advanced-usage.html#ssl-warnings
@@ -158,6 +172,15 @@ class HTTPAction:
             "query": query_parameters,
             "path": path
         }
+        for parameter in config.openapi.parameters:
+            value = Payload.convert_value(
+                parameter,
+                config.openapi_current.path,
+                config.openapi_current.method,
+                True,
+            )
+            if value:
+                type_to_dict[value["type"]].update(value["value"])
         for _argument in arguments:
             type_to_dict[_argument["type"]].update(_argument["value"])
         if len(json) == 1 and "body" in json:
@@ -293,7 +316,7 @@ class Payload(Header):
         )
 
     @classmethod
-    def convert_value(clk, value, path, method):
+    def convert_value(clk, value, path, method, silent_fail=False):
         if not hasattr(config.openapi_current, "given_value"):
             config.openapi_current.given_value = set()
         config.openapi_current.given_value.add(value.split("=")[0])
@@ -317,7 +340,10 @@ class Payload(Header):
                 value = parse_value_properties(value, param["schema"])
                 break
         else:
-            raise NotImplementedError()
+            if silent_fail:
+                return {}
+            else:
+                raise NotImplementedError()
         res["value"] = {key: value}
         res["in"] = res["type"]
         res["name"] = key
