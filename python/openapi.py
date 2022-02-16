@@ -285,11 +285,15 @@ class Payload(Header):
         ] + keys
 
     def convert(self, value, param, ctx):
+        return self.convert_value(value)
+
+    @classmethod
+    def convert_value(clk, value):
         if not hasattr(config.openapi_current, "given_value"):
             config.openapi_current.given_value = set()
         config.openapi_current.given_value.add(value.split("=")[0])
         res = {}
-        for separator, name in self.separator_to_parameter.items():
+        for separator, name in clk.separator_to_parameter.items():
             if separator in value:
                 key, value = value.split(separator)
                 if value.startswith("@"):
@@ -298,7 +302,7 @@ class Payload(Header):
                         value = stdin.read()
                     else:
                         value = json.loads(Path(filepath).read_text())
-                res["type"] = self.separator_to_parameter[separator]
+                res["type"] = clk.separator_to_parameter[separator]
                 break
         else:
             raise NotImplementedError()
