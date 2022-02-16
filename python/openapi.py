@@ -624,6 +624,7 @@ def describe_api(method, path):
 
 @openapi.command()
 def ipython():
+    """Run an interactive python console to play with the code"""
     r = requests.get(
         config.openapi.api_url,
         verify=config.openapi.verify,
