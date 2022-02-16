@@ -318,6 +318,9 @@ class Payload(Header):
         else:
             raise NotImplementedError()
         res["value"] = {key: value}
+        res["in"] = res["type"]
+        res["name"] = key
+        res["value_raw"] = value
         return res
 
 
