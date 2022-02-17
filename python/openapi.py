@@ -97,7 +97,35 @@ def openapi(
     bearer,
     extra_argument,
 ):
-    "Manipulate openapi"
+    """Play with some API defined with openapi
+
+    Simply provide the --base-url to the root of the API and --api-url to the definition,
+    in json of the API.
+
+    Then, use one of the 5 classical verbs get, put, post, patch and delete and then
+    let TAB TAB guide your steps.
+
+    You will notice that there are 4 kinds of arguments: path, query, headers
+    and body (in json). Those are given of the form <key><separator><value>,
+    where separator is respectively ?, &, : and =.
+
+    Thus posting to the endpoint /a with a body of {"a": "b"} and header of c=d
+    would look like this:
+
+    clk openapi post /a a=b c:d
+
+    The values are checked using JSON schema before sending them to the server.
+
+    You can provide a bearer token that while be given in the Authorization
+    header and prefixed with Bearer.
+
+    You can also provide default global values with --extra-arguments. Those
+    will be parsed, JSON schema validated and added as default values of the
+    arguments only if the schema of the given path accept such argument name and
+    type. For example --extra-argument a=b would provide the default body {"a":
+    "b"} only to the endpoints that accept a body parameter named a.
+
+    """
     config.openapi.bearer = bearer
     config.openapi.extra_arguments = extra_argument
 
