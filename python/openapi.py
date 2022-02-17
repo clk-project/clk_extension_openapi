@@ -41,21 +41,6 @@ class OpenApi:
     def verify(self):
         return not self.no_verify
 
-    @property
-    def bearer(self):
-        if not self._bearer:
-
-            @cache_disk(expire=3600)
-            def update_bearer(parameters):
-                return check_output(
-                    ["clk", "openapi", "--bearer", "None", "get-token"],
-                    internal=True,
-                ).strip()
-
-            self._bearer = update_bearer(
-                config.get_parameters("openapi.get-token"))
-        return self._bearer
-
 
 @group()
 @param_config(
@@ -63,14 +48,6 @@ class OpenApi:
     "--api-url",
     typ=OpenApi,
     help="The url of the openapi site",
-    expose_value=True,
-)
-@param_config(
-    "openapi",
-    "--bearer-token-headers",
-    typ=OpenApi,
-    help="In what header values we should put the bearer token",
-    multiple=True,
     expose_value=True,
 )
 @param_config(
@@ -105,8 +82,7 @@ class OpenApi:
 )
 @option(
     "--bearer",
-    help=("Security token to access the API."
-          " Will use the result of the command openapi.get-token by default"),
+    help="Security token to access the API.",
 )
 @option(
     "-p",
@@ -119,11 +95,10 @@ def openapi(
     api_url,
     no_verify,
     bearer,
-    bearer_token_headers,
     parameter,
 ):
     "Manipulate openapi"
-    config.openapi._bearer = bearer
+    config.openapi.bearer = bearer
     config.openapi.parameters = parameter
 
     if config.openapi.no_verify:
@@ -216,12 +191,9 @@ class HTTPAction:
         return self.handle_resp(resp)
 
     def inject_headers(self, path, headers):
-        for header in config.openapi.bearer_token_headers:
-            if header == "Authorization":
-                # follow the OAuth 2.0 standard, see https://datatracker.ietf.org/doc/html/rfc6750#section-2.1
-                headers[header] = "Bearer " + config.openapi.bearer
-            else:
-                headers[header] = config.openapi.bearer
+        if config.openapi.bearer:
+            # follow the OAuth 2.0 standard, see https://datatracker.ietf.org/doc/html/rfc6750#section-2.1
+            headers["Authorization"] = "Bearer " + config.openapi.bearer
 
     def handle_resp(self, resp):
         if resp.status_code // 100 != 2:
@@ -249,11 +221,6 @@ class HTTPAction:
                 print(result)
             else:
                 echo_json(result)
-
-
-@openapi.command()
-def get_token():
-    """Command to get a valid token"""
 
 
 class GetRessource(DynamicChoice):
