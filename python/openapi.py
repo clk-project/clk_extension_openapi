@@ -180,7 +180,7 @@ class HTTPAction:
                 argument,
                 config.openapi_current.path,
                 config.openapi_current.method,
-                True,
+                silent_fail=True,
             )
             if value:
                 type_to_dict[value["type"]].update(value["value"])
