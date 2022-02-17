@@ -137,6 +137,10 @@ def openapi(
         urllib3.disable_warnings()
 
 
+class APIUnavailable(Exception):
+    pass
+
+
 def api():
 
     @cache_disk(expire=3600)
@@ -145,6 +149,8 @@ def api():
             url,
             verify=config.openapi.verify,
         )
+        if resp.status_code // 100 != 2:
+            raise APIUnavailable()
         if url.endswith(".yml") or url.endswith(".yaml"):
             import yaml
             result = yaml.safe_load(resp.text)
