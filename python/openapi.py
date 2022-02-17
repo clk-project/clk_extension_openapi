@@ -216,10 +216,7 @@ class HTTPAction:
         return self.handle_resp(resp)
 
     def inject_headers(self, path, headers):
-        security_headers = list(config.openapi.bearer_token_headers)
-        for security in api()["paths"][path][self.verb].get("security", []):
-            security_headers.extend(security.keys())
-        for header in security_headers:
+        for header in config.openapi.bearer_token_headers:
             if header == "Authorization":
                 # follow the OAuth 2.0 standard, see https://datatracker.ietf.org/doc/html/rfc6750#section-2.1
                 headers[header] = "Bearer " + config.openapi.bearer
