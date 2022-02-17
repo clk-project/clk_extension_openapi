@@ -399,14 +399,14 @@ def get_openapi_body_schema(path, method):
 
 
 def get_security_schemes():
-    return api()["components"]["securitySchemes"]
+    return api()["components"].get("securitySchemes", {})
 
 
 def get_security_params(path, method):
     api_ = api()
     path_data = api_["paths"][path][method]
     schemes = get_security_schemes()
-    for security in path_data["security"]:
+    for security in path_data.get("security", []):
         for key in security.keys():
             scheme = schemes[key]
             if scheme["type"] == "apiKey":
