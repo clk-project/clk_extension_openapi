@@ -227,15 +227,31 @@ class HTTPAction:
                 headers[header] = config.openapi.bearer
 
     def handle_resp(self, resp):
+        if resp.status_code // 100 != 2:
+            LOGGER.info(f"Code: {resp.status_code}")
+        else:
+            LOGGER.debug(f"Code: {resp.status_code}")
         if config.openapi.resp_as_text:
-            return resp.text
+            result = resp.text
         else:
             try:
-                return resp.json()
+                result = resp.json()
             except (JSONDecodeError, SimplejsonJSONDecodeError):
                 raise click.UsageError(
                     "Cannot interpret the following as json in the"
                     f" post answer: '{resp.text}'")
+        self.echo_result(result)
+        if resp.status_code // 100 != 2:
+            return 1
+
+    def echo_result(self, result):
+        if config.openapi.output is not None:
+            config.openapi.output.write_text(result)
+        else:
+            if config.openapi.resp_as_text:
+                print(result)
+            else:
+                echo_json(result)
 
 
 @openapi.command()
@@ -257,16 +273,6 @@ class GetRessource(DynamicChoice):
 def get_callback(ctx, attr, value):
     config.openapi_current.method = "get"
     return value
-
-
-def echo_result(result):
-    if config.openapi.output is not None:
-        config.openapi.output.write_text(result)
-    else:
-        if config.openapi.resp_as_text:
-            print(result)
-        else:
-            echo_json(result)
 
 
 class Payload(DynamicChoice):
@@ -358,7 +364,7 @@ class Payload(DynamicChoice):
 )
 def _get(path, arguments):
     """Get the given path"""
-    echo_result(HTTPAction()(path, arguments))
+    exit(HTTPAction()(path, arguments))
 
 
 class OpenApiResource(DynamicChoice):
@@ -500,7 +506,7 @@ def delete_callback(ctx, attr, value):
               expose_value=True)
 def _delete(path, params):
     """delete to the given path"""
-    echo_result(HTTPAction()(path, params))
+    exit(HTTPAction()(path, params))
 
 
 def post_callback(ctx, attr, value):
@@ -527,7 +533,7 @@ def post_callback(ctx, attr, value):
               expose_value=True)
 def _post(path, params):
     """post to the given path"""
-    echo_result(HTTPAction()(path, params))
+    exit(HTTPAction()(path, params))
 
 
 def patch_callback(ctx, attr, value):
@@ -554,7 +560,7 @@ def patch_callback(ctx, attr, value):
               expose_value=True)
 def _patch(path, params):
     """post to the given path"""
-    echo_result(HTTPAction()(path, arguments))
+    exit(HTTPAction()(path, arguments))
 
 
 def put_callback(ctx, attr, value):
@@ -581,7 +587,7 @@ def put_callback(ctx, attr, value):
               expose_value=True)
 def _put(path, params):
     """put to the given path"""
-    echo_result(HTTPAction()(path, params))
+    exit(HTTPAction()(path, params))
 
 
 @openapi.command()
