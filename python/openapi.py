@@ -97,7 +97,7 @@ def openapi(
     bearer,
     extra_argument,
 ):
-    """Play with some API defined with openapi
+    """Play with some API defined with openapi v3
 
     Simply provide the --base-url to the root of the API and --api-url to the definition,
     in json of the API.
@@ -141,6 +141,10 @@ class APIUnavailable(Exception):
     pass
 
 
+class APIVersionMismatch(Exception):
+    pass
+
+
 def api():
 
     @cache_disk(expire=3600)
@@ -156,6 +160,18 @@ def api():
             result = yaml.safe_load(resp.text)
         else:
             result = resp.json()
+        if version := result.get("openapi"):
+            if not version.startswith("3"):
+                LOGGER.warn(f"You are using openapi v{version} (!= 3)."
+                            " Not sure it will work.")
+        elif version := result.get("swagger"):
+            if version.startswith("2"):
+                LOGGER.warn(f"You are using swagger v{version}."
+                            " It does not work well.")
+            else:
+                LOGGER.warn(f"You are using swagger v{version}."
+                            " Not sure it will work.")
+
         return result
 
     return _api(config.openapi.api_url)
