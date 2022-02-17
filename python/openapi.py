@@ -141,10 +141,15 @@ def api():
 
     @cache_disk(expire=3600)
     def _api(url):
-        result = requests.get(
+        resp = requests.get(
             url,
             verify=config.openapi.verify,
-        ).json()
+        )
+        if url.endswith(".yml") or url.endswith(".yaml"):
+            import yaml
+            result = yaml.safe_load(resp.text)
+        else:
+            result = resp.json()
         return result
 
     return _api(config.openapi.api_url)
