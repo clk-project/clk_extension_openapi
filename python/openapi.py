@@ -85,9 +85,9 @@ class OpenApi:
     help="Security token to access the API.",
 )
 @option(
-    "-p",
-    "--parameter",
-    help="Parameter used in all the calls.",
+    "-a",
+    "--extra-argument",
+    help="Extra argument used in all the calls.",
     multiple=True,
 )
 def openapi(
@@ -95,11 +95,11 @@ def openapi(
     api_url,
     no_verify,
     bearer,
-    parameter,
+    extra_argument,
 ):
     "Manipulate openapi"
     config.openapi.bearer = bearer
-    config.openapi.parameters = parameter
+    config.openapi.extra_arguments = extra_argument
 
     if config.openapi.no_verify:
         # https://urllib3.readthedocs.io/en/latest/advanced-usage.html#ssl-warnings
@@ -147,9 +147,9 @@ class HTTPAction:
             "query": query_parameters,
             "path": path
         }
-        for parameter in config.openapi.parameters:
+        for argument in config.openapi.extra_argumentss:
             value = Payload.convert_value(
-                parameter,
+                argument,
                 config.openapi_current.path,
                 config.openapi_current.method,
                 True,
