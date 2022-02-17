@@ -175,7 +175,7 @@ class HTTPAction:
             "query": query_parameters,
             "path": path
         }
-        for argument in config.openapi.extra_argumentss:
+        for argument in config.openapi.extra_arguments:
             value = Payload.convert_value(
                 argument,
                 config.openapi_current.path,
