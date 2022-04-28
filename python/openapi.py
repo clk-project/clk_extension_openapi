@@ -183,7 +183,12 @@ def api():
 def list_servers_urls(format, fields):
     """Show the servers that you might want to provide as base"""
     with TablePrinter(fields, format) as tp:
-        tp.echo_records(api()["servers"])
+        tp.echo_records([{
+            **{
+                'description': 'NA'
+            },
+            **server
+        } for server in api()["servers"]])
 
 
 class HTTPAction:
