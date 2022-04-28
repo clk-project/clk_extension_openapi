@@ -1,1 +1,3 @@
 pyyaml
+py-openapi-schema-to-json-schema
+jsonschema
