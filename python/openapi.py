@@ -141,18 +141,22 @@ class APIVersionMismatch(Exception):
 def api():
 
     @cache_disk(expire=3600)
-    def _api(url):
-        resp = requests.get(
-            url,
-            verify=config.openapi.verify,
-        )
-        if resp.status_code // 100 != 2:
-            raise APIUnavailable()
+    def _api(url: str):
+        if url.startswith("http"):
+            resp = requests.get(
+                url,
+                verify=config.openapi.verify,
+            )
+            if resp.status_code // 100 != 2:
+                raise APIUnavailable()
+            text = resp.text
+        else:
+            text = Path(url).read_text()
         if url.endswith(".yml") or url.endswith(".yaml"):
             import yaml
-            result = yaml.safe_load(resp.text)
+            result = yaml.safe_load(text)
         else:
-            result = resp.json()
+            result = json.loads(text)
         if version := result.get("openapi"):
             if not version.startswith("3"):
                 LOGGER.warn(f"You are using openapi v{version} (!= 3)."
@@ -671,10 +675,7 @@ def describe_api(method, path):
 @openapi.command()
 def ipython():
     """Run an interactive python console to play with the code"""
-    r = requests.get(
-        config.openapi.api_url,
-        verify=config.openapi.verify,
-    ).json()
+    o = config.openapi
     import IPython
     dict_ = globals()
     dict_.update(locals())
