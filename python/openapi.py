@@ -485,8 +485,9 @@ def get_openapi_parameters(path, method):
                 value.update(dict_json_path(api_, ref))
         if "schema" not in parameter:
             parameter["schema"] = {"type": parameter["type"]}
-        if parameter["in"] == "body" and parameter["schema"][
-                "type"] == "object":
+        if parameter["in"] == "body" and "type" in parameter[
+                "schema"] and parameter["schema"][
+                    "type"] == "object" and "properties" in parameter["schema"]:
             for name, type in parameter["schema"]["properties"].items():
                 parameters2.append({
                     "in": "body",
