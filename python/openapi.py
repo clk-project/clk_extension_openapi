@@ -43,41 +43,34 @@ class OpenApi:
 
 
 @group()
-@param_config(
-    "openapi",
+@option(
     "--api-url",
-    typ=OpenApi,
+    expose_class=OpenApi,
     help="The url of the openapi site",
     expose_value=True,
 )
-@param_config(
-    "openapi",
+@option(
     "--base-url",
-    typ=OpenApi,
     help="The url of the base of the site",
     expose_value=True,
+    expose_class=OpenApi,
 )
-@param_config(
-    "openapi",
+@flag(
     "--no-verify/--verify",
-    typ=OpenApi,
-    kls=flag,
+    expose_class=OpenApi,
     help="Verify https",
     expose_value=True,
 )
-@param_config(
-    "openapi",
+@flag(
     "--resp-as-text/--resp-as-json",
-    typ=OpenApi,
-    kls=flag,
+    expose_class=OpenApi,
     help="Don't try to interpret the resp as json",
 )
-@param_config(
-    "openapi",
+@option(
     "-o",
     "--output",
     type=Path,
-    typ=OpenApi,
+    expose_class=OpenApi,
     help="Some output file to put the result into",
 )
 @option(
@@ -367,20 +360,24 @@ class Payload(DynamicChoice):
         return res
 
 
+class OpenAPI_Current:
+
+    def __init__(self):
+        pass
+
+
 @openapi.command()
-@param_config(
-    "openapi_current",
+@argument(
     "path",
-    kls=argument,
+    expose_class=OpenAPI_Current,
     expose_value=True,
     help="The path to get",
     type=GetRessource(),
     callback=get_callback,
 )
-@param_config(
-    "openapi_current",
+@argument(
     "arguments",
-    kls=argument,
+    expose_class=OpenAPI_Current,
     expose_value=True,
     help="Some header argument",
     type=Payload(),
@@ -512,22 +509,20 @@ def delete_callback(ctx, attr, value):
 
 
 @openapi.command()
-@param_config(
-    "openapi_current",
+@argument(
     "path",
-    kls=argument,
+    expose_class=OpenAPI_Current,
     expose_value=True,
     help="The path to delete to",
     type=OpenApiResource("delete"),
     callback=delete_callback,
 )
-@param_config("openapi_current",
-              "params",
-              kls=argument,
-              nargs=-1,
-              help="The arguments, separated by =",
-              type=Payload(),
-              expose_value=True)
+@argument("params",
+          expose_class=OpenAPI_Current,
+          nargs=-1,
+          help="The arguments, separated by =",
+          type=Payload(),
+          expose_value=True)
 def _delete(path, params):
     """delete to the given path"""
     exit(HTTPAction()(path, params))
@@ -539,22 +534,20 @@ def post_callback(ctx, attr, value):
 
 
 @openapi.command()
-@param_config(
-    "openapi_current",
+@argument(
     "path",
-    kls=argument,
+    expose_class=OpenAPI_Current,
     expose_value=True,
     help="The path to post to",
     type=OpenApiResource("post"),
     callback=post_callback,
 )
-@param_config("openapi_current",
-              "params",
-              kls=argument,
-              nargs=-1,
-              help="The arguments, separated by =",
-              type=Payload(),
-              expose_value=True)
+@argument("params",
+          expose_class=OpenAPI_Current,
+          nargs=-1,
+          help="The arguments, separated by =",
+          type=Payload(),
+          expose_value=True)
 def _post(path, params):
     """post to the given path"""
     exit(HTTPAction()(path, params))
@@ -566,22 +559,19 @@ def patch_callback(ctx, attr, value):
 
 
 @openapi.command()
-@param_config(
-    "openapi_current",
+@argument(
     "path",
-    kls=argument,
     expose_value=True,
     help="The path to patch to",
     type=OpenApiResource("patch"),
     callback=patch_callback,
 )
-@param_config("openapi_current",
-              "params",
-              kls=argument,
-              nargs=-1,
-              help="The arguments, separated by =",
-              type=Payload(),
-              expose_value=True)
+@argument("params",
+          expose_class=OpenAPI_Current,
+          nargs=-1,
+          help="The arguments, separated by =",
+          type=Payload(),
+          expose_value=True)
 def _patch(path, params):
     """post to the given path"""
     exit(HTTPAction()(path, arguments))
@@ -593,32 +583,29 @@ def put_callback(ctx, attr, value):
 
 
 @openapi.command()
-@param_config(
-    "openapi_current",
+@argument(
     "path",
-    kls=argument,
+    expose_class=OpenAPI_Current,
     expose_value=True,
     help="The path to put to",
     type=OpenApiResource("put"),
     callback=put_callback,
 )
-@param_config("openapi_current",
-              "params",
-              kls=argument,
-              nargs=-1,
-              help="The arguments, separated by =",
-              type=Payload(),
-              expose_value=True)
+@argument("params",
+          expose_class=OpenAPI_Current,
+          nargs=-1,
+          help="The arguments, separated by =",
+          type=Payload(),
+          expose_value=True)
 def _put(path, params):
     """put to the given path"""
     exit(HTTPAction()(path, params))
 
 
 @openapi.command()
-@param_config(
-    "openapi_current",
+@argument(
     "path",
-    kls=argument,
+    expose_class=OpenAPI_Current,
     expose_value=True,
     help="The path to describe",
     type=OpenApiResource("post"),
@@ -629,10 +616,9 @@ def describe_post(path):
 
 
 @openapi.command()
-@param_config(
-    "openapi_current",
+@argument(
     "path",
-    kls=argument,
+    expose_class=OpenAPI_Current,
     expose_value=True,
     help="The path to describe",
     type=OpenApiResource("get"),
