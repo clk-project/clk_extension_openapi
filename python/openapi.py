@@ -6,8 +6,6 @@ from pathlib import Path
 from sys import stdin
 from textwrap import indent
 
-from jsonschema import validate, ValidationError
-from openapi_schema_to_json_schema import to_json_schema
 import click
 import requests
 from clk.config import config
@@ -19,6 +17,8 @@ from clk.lib import TablePrinter, call, check_output, echo_json
 from clk.log import get_logger
 from clk.overloads import argument, flag, get_command
 from clk.types import DynamicChoice
+from jsonschema import ValidationError, validate
+from openapi_schema_to_json_schema import to_json_schema
 from simplejson.errors import JSONDecodeError as SimplejsonJSONDecodeError
 
 LOGGER = get_logger(__name__)
@@ -334,6 +334,15 @@ class Payload(DynamicChoice):
             config.openapi_current.given_value = set()
         config.openapi_current.given_value.add(value.split("=")[0])
         res = {}
+        if value.startswith("@"):
+            content = json.loads(Path(value[1:]).read_text())
+            return {
+                "value": content,
+                "in": "body",
+                "name": None,
+                "value_raw": value,
+                "type": "body",
+            }
         for separator, name in clk.separator_to_parameter.items():
             if separator in value:
                 key, value = value.split(separator)
