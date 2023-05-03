@@ -329,7 +329,7 @@ class Payload(DynamicChoice):
         )
 
     @classmethod
-    def convert_value(clk, value, path, method, silent_fail=False):
+    def convert_value(kls, value, path, method, silent_fail=False):
         if not hasattr(config.openapi_current, "given_value"):
             config.openapi_current.given_value = set()
         config.openapi_current.given_value.add(value.split("=")[0])
@@ -343,7 +343,7 @@ class Payload(DynamicChoice):
                 "value_raw": value,
                 "type": "body",
             }
-        for separator, name in clk.separator_to_parameter.items():
+        for separator, name in kls.separator_to_parameter.items():
             if separator in value:
                 key, value = value.split(separator)
                 if value.startswith("@"):
@@ -352,7 +352,7 @@ class Payload(DynamicChoice):
                         value = stdin.read()
                     else:
                         value = json.loads(Path(filepath).read_text())
-                res["type"] = clk.separator_to_parameter[separator]
+                res["type"] = kls.separator_to_parameter[separator]
                 break
         else:
             raise NotImplementedError()
