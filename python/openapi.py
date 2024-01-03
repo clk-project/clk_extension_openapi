@@ -10,12 +10,10 @@ import click
 import requests
 from clk.config import config
 from clk.core import cache_disk
-from clk.decorators import (argument, command, flag, group, option,
-                            param_config, table_fields, table_format,
-                            use_settings)
-from clk.lib import TablePrinter, call, check_output, echo_json
+from clk.decorators import (argument, flag, group, option, table_fields,
+                            table_format)
+from clk.lib import TablePrinter, echo_json
 from clk.log import get_logger
-from clk.overloads import argument, flag, get_command
 from clk.types import DynamicChoice
 from jsonschema import ValidationError, validate
 from openapi_schema_to_json_schema import to_json_schema
